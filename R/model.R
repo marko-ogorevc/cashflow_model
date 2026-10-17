@@ -229,24 +229,26 @@ events_to_db <- function(event_list) {
 plot_events <- function(event_list, discount_rate) {
   events_db <- events_to_db(event_list)
   
-  event_plot <- ggplot(events_db,
-                       aes(x = event_time,
-                           y = event_cashflow)) +
-    geom_col(aes(fill = event_name)) +
-    geom_hline(yintercept = 0) +
-    scale_y_continuous(
-      labels = function(x)
-        paste0("€", x / 1000, "k"),
-      name = "Letni denarni tok"
-    ) +
-    scale_x_continuous(name = "Leto modela") +
-    scale_fill_discrete(name = "Dogodek") +
-    theme_minimal()+
-    theme(
-      legend.position = "none"
-    )
-  
-  
+  # Exclude the internal zero-flow scaffold from the displayed event chart.
+  user_events <- events_db %>% filter(event_name != ".internal_timeline")
+  event_plot <- ggplot(user_events, aes(x=event_time,y=event_cashflow)) +
+    geom_hline(yintercept=0,color="#cbd5e1",linewidth=.4) +
+    geom_col(aes(fill=event_name),width=.8) +
+    scale_y_continuous(labels=function(x) paste0(format(round(x),big.mark=" ",
+      scientific=FALSE,trim=TRUE)," €"),name="Evri") +
+    scale_x_continuous(name="Leto modela") +
+    labs(fill="Dogodek") +
+    theme_minimal(base_size=12) +
+    theme(panel.grid.minor=element_blank(),legend.position="bottom",
+          legend.title=element_blank())
+  if (nrow(user_events)==0)
+    event_plot <- ggplot(tibble(event_time=c(min(events_db$event_time),
+                                      max(events_db$event_time)),event_cashflow=0),
+                        aes(event_time,event_cashflow)) +
+      geom_hline(yintercept=0,color="#cbd5e1") +
+      scale_x_continuous(name="Leto modela") +
+      scale_y_continuous(name="Evri") + theme_minimal(base_size=12)
+
   timeline <- tibble(event_time = seq(min(events_db$event_time), max(events_db$event_time))) %>%
     left_join(events_db %>% group_by(event_time) %>%
       summarise(value = sum(event_cashflow), .groups = "drop"), by="event_time") %>%
