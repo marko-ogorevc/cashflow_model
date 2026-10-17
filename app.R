@@ -715,7 +715,26 @@ server <- function(input, output, session) {
     if (length(rv$myList) > 0) {
       my_plots <- plot_events(rv$myList, var_rate()$rate, borrowing_rate=input$borrowing_rate/100)
       
-      format_time_axis(ggplotly(my_plots$event_plot), money=TRUE)
+      chart <- ggplotly(my_plots$event_plot)
+      # Plotly trace names are created by ggplotly, not by the HTML translator.
+      # Translate at render time so language changes invalidate this plot.
+      lang <- input$language
+      if (identical(lang, "en")) {
+        chart <- plotly::style(chart, traces=seq_along(chart$x$data))
+        for (i in seq_along(chart$x$data)) {
+          trace <- chart$x$data[[i]]
+          if (!is.null(trace$name)) {
+            trace$name <- gsub("Prilivi", "Inflows", trace$name, fixed=TRUE)
+            trace$name <- gsub("Odlivi", "Outflows", trace$name, fixed=TRUE)
+          }
+          if (!is.null(trace$hovertemplate)) {
+            trace$hovertemplate <- gsub("Prilivi", "Inflows", trace$hovertemplate, fixed=TRUE)
+            trace$hovertemplate <- gsub("Odlivi", "Outflows", trace$hovertemplate, fixed=TRUE)
+          }
+          chart$x$data[[i]] <- trace
+        }
+      }
+      format_time_axis(chart, money=TRUE)
       
     }
   })
