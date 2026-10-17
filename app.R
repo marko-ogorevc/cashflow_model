@@ -145,8 +145,8 @@ ui <- fluidPage(
               "Uravnoteženo (60 / 40)"="balanced",
               "Samo obveznice"="bonds"),selected="glide"),
             conditionalPanel("input.asset_strategy == 'glide'",
-              sliderInput("stock_begin","Začetni delež delnic (%)",80,0,100,step=5),
-              sliderInput("stock_finish","Končni delež delnic (%)",20,0,100,step=5)),
+              sliderInput("stock_begin","Začetni delež delnic (%)",min=0,max=100,value=80,step=5),
+              sliderInput("stock_finish","Končni delež delnic (%)",min=0,max=100,value=20,step=5)),
             p("Ilustrativna predpostavka: delnice 7 %, obveznice 3 % letno. Donos ni zagotovljen.",
               class="subtle-help")
           ),
