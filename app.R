@@ -1,16 +1,6 @@
-
-#
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
-# Or use this link https://markoogorevc.shinyapps.io/Cashflow_model/
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-
-#
-# install.packages("shinythemes")
+# Cashflow Model — presentation refresh (2026)
 library(shiny)
-library(shinythemes)
+library(bslib)
 library(plotly)
 library(shinyalert)
 library(rlist)
@@ -18,172 +8,132 @@ library(gridExtra)
 library(tidyverse)
 library(jsonlite)
 
+app_theme <- bs_theme(
+  version = 5,
+  bootswatch = "flatly",
+  bg = "#f5f7fb",
+  fg = "#17273d",
+  primary = "#2363d1",
+  base_font = font_google("Inter")
+)
 
-#UI ####
-
-ui <- fluidPage(# Application title
-  titlePanel("Cashflow model v0.2"),
-  shinythemes::themeSelector(),
-  
-  # This is a sidebar
-  sidebarLayout(
-    sidebarPanel(
-      verticalLayout(#vertical 1
-        
-        wellPanel(
-          fluidRow(column(
-            8,
-            textInput(inputId = "event_name",
-                      label = "Label")
+ui <- fluidPage(
+  theme = app_theme,
+  useShinyalert(),
+  tags$head(
+    tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
+    tags$style(HTML("
+      :root { --ink:#17273d; --muted:#64748b; --line:#e3e9f2; --surface:#fff; }
+      body { background:#f5f7fb; }
+      .container-fluid { max-width:1550px; padding:22px 26px 45px; }
+      .app-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin:7px 0 23px; }
+      .app-title { font-size:clamp(27px,3vw,37px); font-weight:780; letter-spacing:-.045em; margin:0; color:var(--ink); }
+      .app-subtitle { color:var(--muted); font-size:14px; margin:5px 0 0; }
+      .version-pill { border:1px solid #cddbf3; border-radius:999px; color:#2363d1; background:#eef4ff; font-size:12px; padding:7px 12px; font-weight:650; }
+      .panel-card { background:#fff; border:1px solid var(--line); border-radius:15px; padding:20px; margin-bottom:17px; box-shadow:0 5px 22px rgba(28,51,90,.035); }
+      .panel-heading { font-size:16px; font-weight:750; margin:0 0 5px; }
+      .panel-description { font-size:12px; color:var(--muted); margin:0 0 18px; line-height:1.5; }
+      .form-control { border-radius:9px; border-color:#dbe3ef; box-shadow:none; }
+      .control-label { font-size:12px; font-weight:650; color:#40526d; }
+      .btn { border-radius:9px; font-weight:650; }
+      .btn-primary { background:#2363d1; border-color:#2363d1; }
+      .btn-outline-secondary { color:#52657e; border-color:#ced8e7; }
+      .action-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+      .action-row .btn { flex:1; min-width:120px; }
+      .field-with-action { display:flex; align-items:flex-end; gap:9px; }
+      .field-with-action .form-group { flex:1; min-width:0; }
+      .field-with-action .btn { margin-bottom:15px; }
+      .rate-row { padding:11px 0 0; border-top:1px solid #edf1f6; }
+      .rate-row:first-of-type { border-top:0; padding-top:0; }
+      .main-tabs .nav-tabs { border-bottom:1px solid #e4eaf3; margin-bottom:18px; }
+      .main-tabs .nav-link { border:0; border-radius:8px; font-weight:650; color:#65758c; margin-right:8px; }
+      .main-tabs .nav-link.active { background:#eaf1ff; color:#1e5fc8; }
+      .chart-card { border:1px solid var(--line); background:white; border-radius:13px; padding:15px 15px 4px; margin-bottom:15px; }
+      .chart-heading { font-weight:730; font-size:15px; margin:0 0 6px; }
+      .chart-note { font-size:12px; color:var(--muted); margin-bottom:4px; }
+      .empty-help { font-size:12px; color:#64748b; margin:8px 0 0; }
+      #event_list { white-space:pre-wrap; word-break:break-word; background:#f9fbff; border:1px solid #e4eaf3; border-radius:10px; padding:16px; min-height:150px; }
+      @media(max-width:767px) { .container-fluid { padding:14px 12px 28px; } .panel-card { padding:15px; } }
+    "))
+  ),
+  div(class = "app-header",
+      div(
+        h1("Cashflow model", class = "app-title"),
+        p("Explore how cashflows and changing returns shape wealth over time.", class = "app-subtitle")
+      ),
+      span("Presentation edition · v1.0", class = "version-pill")
+  ),
+  fluidRow(
+    column(
+      width = 4,
+      div(class = "panel-card",
+          h3("Cashflow events", class = "panel-heading"),
+          p("Create one-off or recurring inflows and outflows. Use negative values for spending.", class = "panel-description"),
+          div(class = "field-with-action",
+              textInput("event_name", "Event label", placeholder = "e.g. Salary, savings, retirement"),
+              actionButton("gen_names", "Edit event", class = "btn-outline-secondary")
           ),
-          column(
-            4,
-            br(),
-            actionButton(
-              inputId = "gen_names",
-              label = "Get",
-              width = '100%'
-            )
-          )),
           fluidRow(
-            column(4,
-                   textInput(inputId = "event_start",
-                             label = "From")),
-            column(4,
-                   textInput(inputId = "event_end",
-                             label = "To")),
-            column(
-              4,
-              br(),
-              actionButton(
-                inputId = "gen_period",
-                label = "Solve",
-                width = '100%'
-              )
-            )
+            column(4, textInput("event_start", "From (year)", placeholder = "0")),
+            column(4, textInput("event_end", "To (year)", placeholder = "30")),
+            column(4, div(style="padding-top:25px;", actionButton("gen_period", "Solve end", class="btn-outline-secondary", width="100%")))
           ),
-          fluidRow(column(
-            8,
-            textInput(inputId = "event_cashflow",
-                      label = "Cashflow")
+          div(class="field-with-action",
+              textInput("event_cashflow", "Cashflow per year (€)", placeholder="e.g. -12000"),
+              actionButton("get_cashflow", "Solve amount", class="btn-outline-secondary")
           ),
-          
-          column(
-            4,
-            br(),
-            actionButton(
-              inputId = "get_cashflow",
-              label = "Solve",
-              width = '100%'
-            )
-          ),),
-          fluidRow(column(
-            4,
-      
-    # action button -> Ok that adds events linked to the         
-            
-            actionButton(inputId = "ok_button",
-                         label = "Add event")
+          div(class="action-row",
+              actionButton("ok_button", "Add event", class="btn-primary"),
+              actionButton("delete_list", "Clear all", class="btn-outline-secondary")
           ),
-          column(
-            4,
-            actionButton(inputId = "delete_list",
-                         label = "Delete events")
-          ))
-        )),
-      
-      #vertical 2
-      wellPanel(
-        fluidRow(column(
-          8,
-          sliderInput(
-            inputId = "r0",
-            label = "t0 rate",
-            value = 0.05,
-            min = 0,
-            max = 0.1,
-            step = 0.005
+          p("Tip: leave 'To' blank for a single-year event.", class="empty-help")
+      ),
+      div(class="panel-card",
+          h3("Expected returns", class="panel-heading"),
+          p("Rates transition linearly between the selected breakpoints.", class="panel-description"),
+          div(class="rate-row",
+              fluidRow(column(8,sliderInput("r0", "Initial annual rate",value=.05,min=0,max=.1,step=.005)),
+                       column(4,numericInput("t0","First break",value=50,min=0,max=100,step=1)))
+          ),
+          div(class="rate-row",
+              fluidRow(column(8,sliderInput("r1","Middle annual rate",value=.025,min=0,max=.1,step=.005)),
+                       column(4,numericInput("t1","Second break",value=60,min=0,max=100,step=1)))
+          ),
+          div(class="rate-row",
+              fluidRow(column(8,sliderInput("r2","Final annual rate",value=.01,min=0,max=.1,step=.005)),
+                       column(4,numericInput("t2","Third break",value=80,min=0,max=100,step=1)))
           )
-        ),
-        column(
-          4,
-          numericInput(
-            inputId = "t0",
-            label = "t0 break",
-            value = 50,
-            min = 0,
-            max = 100,
-            step = 1
-          ),
-        )),
-        
-        fluidRow(
-          column(
-            8,
-            sliderInput(
-              inputId = "r1",
-              label = "t1 rate",
-              value = 0.025,
-              min = 0,
-              max = 0.1,
-              step = 0.005
-            )
-          ),
-          column(
-            4,
-            numericInput(
-              inputId = "t1",
-              label = "t1 break",
-              value = 60,
-              min = 0,
-              max = 100,
-              step = 1
-            ),
-          )
-        ),
-        fluidRow(
-          column(
-            8,
-            sliderInput(
-              inputId = "r2",
-              label = "t2 rate",
-              value = 0.01,
-              min = 0,
-              max = 0.1,
-              step = 0.005
-            )
-          ),
-          column(
-            4,
-            numericInput(
-              inputId = "t2",
-              label = "t2 break",
-              value = 80,
-              min = 0,
-              max = 100,
-              step = 1
-            )
-          )
-        )
-        
       )
     ),
-    
-    # Show a plot of the generated distribution
-    mainPanel(fluidPage(tabsetPanel(
-      tabPanel(
-        "Overview",
-        
-        plotlyOutput("balance_plot_output", height = "200px"),
-        plotlyOutput("cashflow_plot_output", height = "200px"),
-        plotlyOutput("interest_plot_output", height = "200px")
+    column(
+      width = 8,
+      div(class="panel-card main-tabs",
+          tabsetPanel(
+            tabPanel("Overview",
+                     div(class="chart-card",
+                         h3("Portfolio balance",class="chart-heading"),
+                         p("Projected account value after cashflows and investment returns.",class="chart-note"),
+                         plotlyOutput("balance_plot_output",height="260px")
+                     ),
+                     div(class="chart-card",
+                         h3("Annual cashflows",class="chart-heading"),
+                         plotlyOutput("cashflow_plot_output",height="230px")
+                     ),
+                     div(class="chart-card",
+                         h3("Expected return",class="chart-heading"),
+                         plotlyOutput("interest_plot_output",height="210px")
+                     )
+            ),
+            tabPanel("Events",
+                     h3("Configured events",class="chart-heading"),
+                     p("Events are stored for the current browser session.",class="chart-note"),
+                     verbatimTextOutput("event_list")
+            )
+          )
       )
-      ,
-      tabPanel("Events",
-               verbatimTextOutput(outputId = "event_list"))
-    )))
-  ))
-
+    )
+  )
+)
 
 # SERVER ####
 
@@ -588,13 +538,13 @@ server <- function(input, output, session) {
   
   
   output$event_list <- renderPrint({
-    toJSON(rv$myList, prety = TRUE)
+    toJSON(rv$myList, pretty = TRUE, auto_unbox = TRUE)
   })
   
   
   var_rate = reactive({
     get_var_rate(
-      period = range(events_to_db(rv$myList)$event_time),
+      period = if (length(rv$myList) > 0) range(events_to_db(rv$myList)$event_time) else c(0, 100),
       r0 = input$r0,
       t0 = input$t0,
       r1 = input$r1,
