@@ -424,8 +424,16 @@ server <- function(input, output, session) {
     function(display_value) as.numeric(display_value) - origin()
   })
   output$timeline_description <- renderText({
-    paste0("Prikaz od ", display_year()(0), " do ",
-           display_year()(input$horizon), if (input$time_mode == "calendar") "." else " let")
+    english <- identical(input$language, "en")
+    first <- display_year()(0)
+    last <- display_year()(input$horizon)
+    if (english) {
+      paste0("Display from ", first, " to ", last,
+             if (input$time_mode == "calendar") "." else " years")
+    } else {
+      paste0("Prikaz od ", first, " do ", last,
+             if (input$time_mode == "calendar") "." else " let")
+    }
   })
   observeEvent(input$horizon, {
     req(is.finite(input$horizon), input$horizon >= 1, input$horizon <= 150)
