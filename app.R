@@ -579,13 +579,35 @@ server <- function(input, output, session) {
     )
   })
   
-  format_time_axis <- function(plot_object) {
+  # Explicit tick labels avoid Plotly's scientific notation (e.g. 2e+05).
+  euro_axis <- function(x) {
+    vapply(x, function(v) {
+      if (abs(v) < 1e-8) return("0 €")
+      if (abs(v) >= 1e6) return(paste0(format(round(v/1e6, 1), trim=TRUE, scientific=FALSE), "m €"))
+      if (abs(v) >= 1000) return(paste0(format(round(v/1000, 0), trim=TRUE, scientific=FALSE), "k €"))
+      paste0(format(round(v, 0), trim=TRUE, scientific=FALSE), " €")
+    }, character(1))
+  }
+  format_time_axis <- function(plot_object, money = FALSE) {
     times <- range(events_to_db(rv$myList)$event_time)
     ticks <- pretty(times, n=7)
     ticks <- ticks[ticks >= times[1] & ticks <= times[2]]
-    plotly::layout(plot_object,
-      xaxis=list(title=list(text=""), tickmode="array",
-                 tickvals=ticks, ticktext=display_year()(ticks)))
+    opts <- list(xaxis=list(title=list(text=""), tickmode="array",
+                       tickvals=ticks, ticktext=display_year()(ticks)),
+                 legend=list(orientation="h", x=.5, xanchor="center", y=-.19),
+                 margin=list(l=65,r=18,t=12,b=58),
+                 paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)")
+    if (money) {
+      yvalues <- unlist(lapply(plot_object$x$data, function(tr) as.numeric(tr$y)))
+      yvalues <- yvalues[is.finite(yvalues)]
+      if (length(yvalues)) {
+        yticks <- pretty(range(c(0,yvalues)),n=5)
+        opts$yaxis <- list(title=list(text=""),tickmode="array",
+                           tickvals=yticks,ticktext=euro_axis(yticks),
+                           zeroline=TRUE,zerolinecolor="#d3dce4")
+      }
+    } else opts$yaxis <- list(title=list(text=""))
+    do.call(plotly::layout,c(list(p=plot_object),opts))
   }
 
   model_results <- reactive({
@@ -628,17 +650,17 @@ server <- function(input, output, session) {
       
       d <- display_results()
       graph <- ggplot(d,aes(event_time)) +
-        geom_line(aes(y=value_time,color="Trenutni scenarij"),linewidth=1.1) +
-        geom_line(aes(y=net_flows,color="Neto tokovi"),linetype="dashed") +
-        scale_color_manual(values=c("Trenutni scenarij"="#245b7b","Neto tokovi"="#b17f48",
-                                   "Primerjava"="#8091a6"),name=NULL) +
-        labs(x="Leto modela",y="Evri")+theme_minimal()+
+        geom_line(aes(y=value_time,color="Trenutni scenarij"),linewidth=1.25) +
+        geom_line(aes(y=net_flows,color="Neto tokovi"),linewidth=.8,linetype="dashed") +
+        scale_color_manual(values=c("Trenutni scenarij"="#245B7B","Neto tokovi"="#4A9B83",
+                                   "Primerjava"="#8995A5"),name=NULL) +
+        labs(x=NULL,y=NULL)+theme_minimal()+
         theme(legend.position="bottom")
       prior <- comparison()
       if (!is.null(prior))
         graph <- graph+geom_line(data=prior,aes(x=event_time,y=value_time,
             color="Primerjava"),linetype="dotted",inherit.aes=FALSE)
-      format_time_axis(ggplotly(graph))
+      format_time_axis(ggplotly(graph), money=TRUE)
       
     }
   })
@@ -648,14 +670,14 @@ server <- function(input, output, session) {
     if (length(rv$myList) > 0) {
       my_plots <- plot_events(rv$myList, var_rate()$rate)
       
-      format_time_axis(ggplotly(my_plots$event_plot))
+      format_time_axis(ggplotly(my_plots$event_plot), money=TRUE)
       
     }
   })
   
   output$interest_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
-      format_time_axis(ggplotly(var_rate()$rate_plot))
+      format_time_axis(ggplotly(var_rate()$rate_plot), money=FALSE)
       
     }
   })
