@@ -147,6 +147,9 @@ ui <- fluidPage(
             conditionalPanel("input.asset_strategy == 'glide'",
               sliderInput("stock_begin","Začetni delež delnic (%)",min=0,max=100,value=80,step=5),
               sliderInput("stock_finish","Končni delež delnic (%)",min=0,max=100,value=20,step=5)),
+            h4("Razporeditev naložb skozi čas",style="font-size:13px;font-weight:700;margin-top:14px;"),
+            plotlyOutput("allocation_plot",height="185px"),
+            p("Delnice / obveznice: od začetka do konca načrta.",class="subtle-help"),
             p("Ilustrativna predpostavka: delnice 7 %, obveznice 3 % letno. Donos ni zagotovljen.",
               class="subtle-help")
           ),
@@ -551,6 +554,37 @@ server <- function(input, output, session) {
     }
     previous_origin(new_origin)
   }, ignoreInit=FALSE)
+
+  allocation_data <- reactive({
+    req(input$horizon, input$asset_strategy)
+    years <- 0:as.integer(input$horizon)
+    start <- if (input$asset_strategy=="equities") 100 else
+      if (input$asset_strategy=="bonds") 0 else
+      if (input$asset_strategy=="balanced") 60 else input$stock_begin
+    finish <- if (input$asset_strategy=="glide") input$stock_finish else start
+    stocks <- pmax(0,pmin(100,start+(finish-start)*years/max(1,input$horizon)))
+    tibble(t=years, stocks=stocks, bonds=100-stocks)
+  })
+  output$allocation_plot <- renderPlotly({
+    d <- allocation_data()
+    p <- plotly::plot_ly(d, x=~t) %>%
+      plotly::add_trace(y=~stocks, type="scatter", mode="lines", stackgroup="one",
+        name="Delnice", line=list(width=0.5,color="#4A9B83"),
+        fillcolor="#4A9B83", hovertemplate="%{y:.0f}%<extra>Delnice</extra>") %>%
+      plotly::add_trace(y=~bonds, type="scatter", mode="lines", stackgroup="one",
+        name="Obveznice",line=list(width=0.5,color="#91A4AB"),
+        fillcolor="#91A4AB",hovertemplate="%{y:.0f}%<extra>Obveznice</extra>")
+    ticks <- pretty(range(d$t),n=5)
+    ticks <- ticks[ticks>=min(d$t) & ticks<=max(d$t)]
+    plotly::layout(p,
+      xaxis=list(title=list(text=""),tickmode="array",tickvals=ticks,
+                 ticktext=display_year()(ticks),showgrid=FALSE,zeroline=FALSE),
+      yaxis=list(title=list(text=""),range=c(0,100),ticksuffix="%",
+                 dtick=25,zeroline=FALSE),
+      margin=list(l=38,r=8,t=4,b=35),
+      legend=list(orientation="h",x=.5,xanchor="center",y=-.22),
+      paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)")
+  })
 
   var_rate = reactive({
     if (identical(input$model_mode,"simple")) {
