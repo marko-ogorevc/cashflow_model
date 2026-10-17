@@ -584,9 +584,8 @@ server <- function(input, output, session) {
     ticks <- pretty(times, n=7)
     ticks <- ticks[ticks >= times[1] & ticks <= times[2]]
     plotly::layout(plot_object,
-      xaxis=list(title=if (input$time_mode == "age") "Starost" else
-                   if (input$time_mode == "calendar") "Koledarsko leto" else "Leta od začetka",
-        tickmode="array", tickvals=ticks, ticktext=display_year()(ticks)))
+      xaxis=list(title=list(text=""), tickmode="array",
+                 tickvals=ticks, ticktext=display_year()(ticks)))
   }
 
   model_results <- reactive({
