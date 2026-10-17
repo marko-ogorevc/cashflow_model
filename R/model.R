@@ -79,99 +79,65 @@ get_var_rate <- function(period = c(0, 100),
 }
 
 
-#get yearly investment caclulates annual investment in a way that NPV (net present value of everything is 0)
-get_yearly_investment <-
-  function(event_list,
-           event_time,
-           discount_rate) {
-    #test for discount rate ### need to specify more exemptions and exit / stop messages and warnings...
-    
-    #calculates discount factor at each time step. if rate was constant then 1/(1+r)^t
-    #but rate needs not be constant so cumulative product (1+r0)*(1+r1)+(1+r2)...
-    discount_factor <- discount_rate %>%
-      mutate(
-        lag_rate = lag(rate, 1),
-        lag_rate = replace_na(lag_rate, 0),
-        discount_factor = 1 / cumprod(1 + lag_rate)
-      )
-    
-    
-    
-    cashflows <- events_to_db(event_list) %>%
-      left_join(discount_factor, by = c("event_time" = "t")) %>%
-      mutate(
-        discount_factor = discount_factor / max(discount_factor),
-        NPV = event_cashflow * discount_factor
-      )
-    
-    accumulation <-
-      tibble(t = min(cashflows$event_time):max(cashflows$event_time)) %>%
-      left_join(discount_factor, by = "t") %>%
-      mutate(discount_factor = discount_factor / max(discount_factor)) %>%
-      filter(t >= min(event_time),
-             t <= max(event_time))
-    
-    annual_investment <-
-      -sum(cashflows$NPV) / sum(accumulation$discount_factor)
-    
-    return(annual_investment)
-    
+# Simulate the same end-of-period cashflow and debt/return rules as plot_events.
+# Used by both inverse solvers without building ggplot objects.
+simulate_final_balance <- function(event_list, discount_rate, borrowing_rate=0.06,
+                                   extra_years=integer(), extra_cashflow=0) {
+  stopifnot(length(borrowing_rate)==1, is.finite(borrowing_rate), borrowing_rate>=0)
+  flows <- events_to_db(event_list)
+  years <- seq(min(flows$event_time), max(flows$event_time))
+  amounts <- vapply(years, function(y) sum(flows$event_cashflow[flows$event_time==y]), numeric(1))
+  if (length(extra_years)) {
+    if (any(!extra_years %in% years)) stop("Izbrano obdobje je zunaj časovnice.")
+    amounts <- amounts + as.numeric(years %in% extra_years)*extra_cashflow
   }
+  rates <- discount_rate$rate[match(years,discount_rate$t)]
+  if (anyNA(rates)) stop("Manjkajo stopnje donosnosti za časovnico.")
+  balance <- 0
+  for (i in seq_along(years)) {
+    if (i>1) balance <- balance * (1 + if (balance<0) borrowing_rate else rates[i-1])
+    balance <- balance + amounts[i]
+  }
+  balance
+}
 
-get_period <- function(event_list,
-                       event_time,
-                       event_cashflow,
-                       discount_rate) {
-  
-  #cacluate discount factor at each step
-  discount_factor <- discount_rate %>%
-    mutate(
-      lag_rate = lag(rate, 1),
-      lag_rate = replace_na(lag_rate, 0),
-      #rate r need not be constant, hence cumproduct
-      discount_factor = 1 / cumprod(1 + lag_rate)
-    )
-  
-  #creates cashflows, first creat data.frame from event list
-  cashflows <- events_to_db(event_list) %>%
-    #join date from the discount factor
-    left_join(discount_factor, by = c("event_time" = "t")) %>%
-    # mutate is generate. it creats variables.
-    mutate(
-      discount_factor = discount_factor / max(discount_factor),
-      #NPV is net present value. product of discount factor and value
-      NPV = event_cashflow * discount_factor
-    )
-  
-  # this variable answers how much has accumulated and maybe i forgot what thi is all about.
-  # I honestly have no clue. 
-  #aha!!! this one gives the last period if one want to know how many years would it take to reach a goal with a predermined annual investment or something
-  
-  
-  accumulation <-
-  #it take the perido from the min time event to max time event
-    tibble(t = min(cashflows$event_time):max(cashflows$event_time)) %>%
-    #add discount factor
-    left_join(discount_factor, by = "t") %>%
-    # calculate relative discount factor
-    mutate(discount_factor = discount_factor / max(discount_factor)) %>%
-    #apparently it can be different
-    filter(t >= min(event_time)) %>%
-    #and generate values for goal with is discounted cashflow
-    mutate(
-      goal = cumsum(discount_factor * event_cashflow),
-      #and just test if the goal is reached
-      goal_reached = ifelse(goal >= -sum(cashflows$NPV), TRUE, FALSE)
-    ) %>%
-    #and when it's reached
-    filter(goal_reached) %>%
-    #take the minimum of time and that is the answer
-    summarise(t_end = min(t))
-  
-  
-  return(accumulation$t_end)
-  
-  
+# Find a constant additional annual flow that makes the terminal balance zero.
+get_yearly_investment <- function(event_list, event_time, discount_rate,
+                                  borrowing_rate=0.06) {
+  event_time <- as.numeric(event_time)
+  if (!length(event_time) || any(!is.finite(event_time)))
+    stop("Neveljavno obdobje vplačil.")
+  terminal <- function(amount) simulate_final_balance(
+    event_list,discount_rate,borrowing_rate,event_time,amount)
+  zero <- terminal(0)
+  if (abs(zero)<1e-8) return(0)
+  # The terminal balance is monotonic in an additional cashflow.
+  bound <- max(1,abs(zero))
+  for (i in seq_len(60)) {
+    lower <- terminal(-bound)
+    upper <- terminal(bound)
+    if (lower<=0 && upper>=0)
+      return(uniroot(terminal,c(-bound,bound),tol=1e-8)$root)
+    bound <- bound*2
+  }
+  stop("Zneska ni mogoče izračunati v izbranem obdobju.")
+}
+
+# Find the earliest end year for which the added annual flow meets the goal.
+get_period <- function(event_list, event_time, event_cashflow, discount_rate,
+                       borrowing_rate=0.06) {
+  start <- as.numeric(event_time)
+  amount <- as.numeric(event_cashflow)
+  years <- events_to_db(event_list)$event_time
+  if (length(start)!=1 || !is.finite(start) || length(amount)!=1 ||
+      !is.finite(amount)) stop("Neveljavno začetno leto ali znesek.")
+  candidates <- seq(start,max(years))
+  for (last in candidates) {
+    final <- simulate_final_balance(event_list,discount_rate,borrowing_rate,
+                                    seq(start,last),amount)
+    if (final>=-1e-8) return(last)
+  }
+  NA_real_
 }
 
 
