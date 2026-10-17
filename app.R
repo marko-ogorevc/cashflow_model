@@ -294,6 +294,14 @@ server <- function(input, output, session) {
                      t1=isolate(to_period()(input$t1)),
                      t2=isolate(to_period()(input$t2)))
       )
+      model$preferences <- list(
+        model_mode=isolate(input$model_mode),
+        asset_strategy=isolate(input$asset_strategy),
+        stock_begin=isolate(input$stock_begin),
+        stock_finish=isolate(input$stock_finish),
+        inflation=isolate(input$inflation),
+        real_values=isolate(input$real_values)
+      )
       jsonlite::write_json(model,file,pretty=TRUE,auto_unbox=TRUE)
     }
   )
@@ -320,6 +328,28 @@ server <- function(input, output, session) {
           any(!is.finite(rvect)) || any(rvect[1:3]<0) ||
           any(rvect[1:3]>.1) || any(abs(rvect[4:6])>10000))
         stop("Neveljavne nastavitve scenarija.")
+      prefs <- model$preferences
+      if (!is.null(prefs)) {
+        pm <- prefs$model_mode
+        ps <- prefs$asset_strategy
+        if (!pm %in% c("simple","advanced") ||
+            !ps %in% c("glide","equities","balanced","bonds"))
+          stop("Neveljavna naložbena strategija.")
+        numeric_prefs <- c(stock_begin=as.numeric(prefs$stock_begin),
+          stock_finish=as.numeric(prefs$stock_finish),
+          inflation=as.numeric(prefs$inflation))
+        if (any(!is.finite(numeric_prefs)) ||
+            any(numeric_prefs[c("stock_begin","stock_finish")]<0) ||
+            any(numeric_prefs[c("stock_begin","stock_finish")]>100) ||
+            abs(numeric_prefs["inflation"])>30)
+          stop("Neveljavne naložbene ali inflacijske predpostavke.")
+        updateRadioButtons(session,"model_mode",selected=pm)
+        updateSelectInput(session,"asset_strategy",selected=ps)
+        updateSliderInput(session,"stock_begin",value=numeric_prefs["stock_begin"])
+        updateSliderInput(session,"stock_finish",value=numeric_prefs["stock_finish"])
+        updateNumericInput(session,"inflation",value=numeric_prefs["inflation"])
+        updateCheckboxInput(session,"real_values",value=isTRUE(prefs$real_values))
+      }
       # Apply a different display origin only after all numeric inputs are validated.
       updateRadioButtons(session,"time_mode",selected=d$mode)
       updateNumericInput(session,"starting_age",value=age)
@@ -339,7 +369,7 @@ server <- function(input, output, session) {
   })
 
   comparison <- reactiveVal(NULL)
-  observeEvent(input$save_comparison, { comparison(model_results()) })
+  observeEvent(input$save_comparison, { comparison(display_results()) })
   observeEvent(input$clear_comparison, { comparison(NULL) })
 
   # Model periods are always relative to the beginning; display is a reversible mapping.
@@ -448,7 +478,7 @@ server <- function(input, output, session) {
       updateTextInput(
         session,
         "event_cashflow",
-        value = get_yearly_investment(
+        value = (get_yearly_investment(
           event_list = rv$myList,
           event_time = seq(
             from = to_period()(input$event_start),
@@ -459,7 +489,7 @@ server <- function(input, output, session) {
             ))
           ),
           discount_rate = var_rate()$rate
-        )
+        )) / if (identical(input$amount_frequency,"monthly")) 12 else 1
       )
     }
     
