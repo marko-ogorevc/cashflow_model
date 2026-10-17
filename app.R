@@ -720,7 +720,6 @@ server <- function(input, output, session) {
       # Translate at render time so language changes invalidate this plot.
       lang <- input$language
       if (identical(lang, "en")) {
-        chart <- plotly::style(chart, traces=seq_along(chart$x$data))
         for (i in seq_along(chart$x$data)) {
           trace <- chart$x$data[[i]]
           if (!is.null(trace$name)) {
