@@ -233,7 +233,8 @@ plot_events <- function(event_list, discount_rate) {
   user_events <- events_db %>% filter(event_name != ".internal_timeline")
   event_plot <- ggplot(user_events, aes(x=event_time,y=event_cashflow)) +
     geom_hline(yintercept=0,color="#cbd5e1",linewidth=.4) +
-    geom_col(aes(fill=event_name),width=.8) +
+    geom_col(aes(fill=ifelse(event_cashflow>=0,"Prilivi","Odlivi")),width=.8) +
+    scale_fill_manual(values=c("Prilivi"="#4A9B83","Odlivi"="#C66B66"),name=NULL) +
     scale_y_continuous(labels=function(x) paste0(format(round(x),big.mark=" ",
       scientific=FALSE,trim=TRUE)," €"),name="Evri") +
     scale_x_continuous(name="Leto modela") +
@@ -247,7 +248,7 @@ plot_events <- function(event_list, discount_rate) {
                         aes(event_time,event_cashflow)) +
       geom_hline(yintercept=0,color="#cbd5e1") +
       scale_x_continuous(name="Leto modela") +
-      scale_y_continuous(name="Evri") + theme_minimal(base_size=12)
+      scale_y_continuous(name=NULL) + theme_minimal(base_size=12)
 
   timeline <- tibble(event_time = seq(min(events_db$event_time), max(events_db$event_time))) %>%
     left_join(events_db %>% group_by(event_time) %>%
@@ -268,7 +269,7 @@ plot_events <- function(event_list, discount_rate) {
     geom_line(aes(y=value_time, color="Skupno stanje"), linewidth=1.1) +
     geom_line(aes(y=net_flows, color="Neto denarni tokovi"), linewidth=.85, linetype="dashed") +
     scale_color_manual(values=c("Skupno stanje"="#245b7b",
-                                "Neto denarni tokovi"="#b17f48"), name=NULL) +
+                                "Neto denarni tokovi"="#4A9B83"), name=NULL) +
     scale_y_continuous(labels=function(x) paste0(format(round(x), big.mark=" ", scientific=FALSE), " €"),
                        name="Evri") +
     scale_x_continuous(name="Leto modela") +
