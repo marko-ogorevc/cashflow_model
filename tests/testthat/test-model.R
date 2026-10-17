@@ -3,7 +3,10 @@ library(testthat)
 library(tidyverse)
 library(rlist)
 library(ggplot2)
-source("R/model.R", local = TRUE)
+model_paths <- c("R/model.R", "../../R/model.R", "../R/model.R")
+model_path <- model_paths[file.exists(model_paths)][1]
+if (is.na(model_path)) stop("R/model.R ni mogoče najti. Zaženi test iz korena projekta ali tests/testthat.")
+source(model_path, local = TRUE)
 
 event <- function(name, years, amount) {
   list(event_name=name, event_time=years, event_cashflow=amount)
