@@ -112,15 +112,15 @@ ui <- fluidPage(
           p("Predpostavljena letna donosnost se med izbranimi leti postopno spreminja. Donosnost ni zagotovljena.", class="panel-description"),
           div(class="rate-row",
               fluidRow(column(8,sliderInput("r0", "Začetna donosnost",value=.05,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t0","Prvo leto",value=50,min=NULL,max=NULL,step=1)))
+                       column(4,numericInput("t0","Prvo leto",value=50,min=-10000,max=10000,step=1)))
           ),
           div(class="rate-row",
               fluidRow(column(8,sliderInput("r1","Vmesna donosnost",value=.025,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t1","Drugo leto",value=60,min=NULL,max=NULL,step=1)))
+                       column(4,numericInput("t1","Drugo leto",value=60,min=-10000,max=10000,step=1)))
           ),
           div(class="rate-row",
               fluidRow(column(8,sliderInput("r2","Končna donosnost",value=.01,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t2","Tretje leto",value=80,min=NULL,max=NULL,step=1)))
+                       column(4,numericInput("t2","Tretje leto",value=80,min=-10000,max=10000,step=1)))
           )
       )
     ),
