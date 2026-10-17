@@ -222,6 +222,10 @@ ui <- fluidPage(
 
 
 server <- function(input, output, session) {
+  observeEvent(input$language, {
+    session$sendCustomMessage("cashflow-language", input$language)
+  }, ignoreInit = FALSE)
+
   # All existing mathematical functions are loaded without altering their formulas.
   source('R/model.R', local = TRUE)
 
