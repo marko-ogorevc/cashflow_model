@@ -107,6 +107,19 @@
       document.documentElement.lang = next;
     } finally { busy = false; }
   }
+  // Shiny selectInput uses Selectize/jQuery events; listen to Shiny's
+  // explicit server-to-browser message instead of relying on native change.
+  function registerHandler() {
+    if (window.Shiny && window.Shiny.addCustomMessageHandler) {
+      window.Shiny.addCustomMessageHandler("cashflow-language", switchLanguage);
+      return true;
+    }
+    return false;
+  }
+  if (!registerHandler()) {
+    document.addEventListener("shiny:connected", registerHandler, {once:true});
+  }
+  // Also support keyboard/native changes when not running in Shiny.
   document.addEventListener("change", event => {
     if (event.target && event.target.id === "language") switchLanguage(event.target.value);
   });
