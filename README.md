@@ -2,6 +2,10 @@
 
 **Interaktivni simulator denarnih tokov in dolgoročnih finančnih scenarijev.**
 
+### [Odpri spletno aplikacijo →](https://01a14ac5-c78a-4d78-1589-237cc617ac8f.share.connect.posit.cloud/)
+
+Aplikacija je objavljena na Posit Connect Cloud; povezavo lahko deliš neposredno.
+
 Cashflow Model omogoča raziskovanje, kako enkratni in ponavljajoči se prilivi, odlivi ter časovno spremenljive stopnje donosnosti vplivajo na finančno stanje skozi čas. Namenjen je tako začetnikom kot uporabnikom, ki želijo oblikovati podrobnejše scenarije.
 
 > Model je ponazoritev na podlagi uporabnikovih predpostavk, ne finančna napoved ali naložbeno priporočilo.
@@ -78,9 +82,7 @@ Pri uvozu uporabljaj datoteke iz zaupanja vrednih virov.
 
 ## Spletna predstavitev
 
-Prvotna objava: [Cashflow Model na shinyapps.io](https://markoogorevc.shinyapps.io/Cashflow_model/).
-
-**Objava se ne posodobi samodejno ob spremembah GitHuba.** Povezava lahko zato prikazuje starejšo različico od kode v tem repozitoriju.
+**[Zaženi Cashflow Model](https://01a14ac5-c78a-4d78-1589-237cc617ac8f.share.connect.posit.cloud/)** na Posit Connect Cloud.
 
 ## Razvoj
 
