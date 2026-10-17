@@ -48,6 +48,9 @@ ui <- fluidPage(
       .main-tabs .nav-tabs { border-bottom:1px solid #e4eaf3; margin-bottom:18px; }
       .main-tabs .nav-link { border:0; border-radius:8px; font-weight:650; color:#65758c; margin-right:8px; }
       .main-tabs .nav-link.active { background:#edf4f6; color:#245b7b; }
+      .metric-card { background:#fff; border:1px solid var(--line); border-radius:11px; margin-bottom:15px; padding:15px; min-height:90px; } 
+      .metric-card span { display:block; color:#64748b; font-size:12px; margin-bottom:8px; }
+      .metric-card strong { display:block; color:#17273d; font-size:clamp(18px,2vw,25px); font-weight:750; }
       .chart-card { border:1px solid var(--line); background:white; border-radius:13px; padding:15px 15px 4px; margin-bottom:15px; }
       .chart-heading { font-weight:730; font-size:15px; margin:0 0 6px; }
       .chart-note { font-size:12px; color:var(--muted); margin-bottom:4px; }
@@ -126,9 +129,14 @@ ui <- fluidPage(
       div(class="panel-card main-tabs",
           tabsetPanel(
             tabPanel("Pregled",
+                     fluidRow(
+                       column(4, div(class="metric-card", span("Končno stanje"), strong(textOutput("final_balance", inline=TRUE)))),
+                       column(4, div(class="metric-card", span("Neto denarni tokovi"), strong(textOutput("net_contributions", inline=TRUE)))),
+                       column(4, div(class="metric-card", span("Učinek donosnosti"), strong(textOutput("total_returns", inline=TRUE))))
+                     ),
                      div(class="chart-card",
-                         h3("Kako se spreminjajo prihranki?",class="chart-heading"),
-                         p("Ponazoritev stanja po upoštevanju vnosov in predpostavljene donosnosti.",class="chart-note"),
+                         h3("Stanje, denarni tokovi in donosnost",class="chart-heading"),
+                         p("Primerjava skupnega stanja s kumulativnimi neto denarnimi tokovi. Razlika predstavlja učinek predpostavljene donosnosti.",class="chart-note"),
                          plotlyOutput("balance_plot_output",height="260px")
                      ),
                      div(class="chart-card",
@@ -406,53 +414,32 @@ server <- function(input, output, session) {
       )
     
     
-    #plot 2
-    
-    timeline <-
-      tibble(event_time = min(events_db$event_time):max(events_db$event_time)) %>%
-      left_join(events_db %>%
-                  group_by(event_time) %>%
-                  summarise(value = sum(event_cashflow))) %>%
-      left_join(discount_rate, by = c("event_time"  = "t")) %>%
-      mutate(
-        value = replace_na(value, 0),
-        t = 1:(n()),
-        lag_rate = lag(rate, 1),
-        lag_rate = replace_na(lag_rate, 0),
-        value_time = 0
-      )
-    
-    for (t in timeline$t) {
-      if (t == 1) {
-        timeline$value_time[t] = (timeline$value[t])
-      } else if (t > 1) {
-        timeline$value_time[t] = (timeline$value_time[t - 1]*(1 + timeline$lag_rate[t]) + timeline$value[t]) 
-      }
-      
-      
+    timeline <- tibble(event_time = seq(min(events_db$event_time), max(events_db$event_time))) %>%
+      left_join(events_db %>% group_by(event_time) %>%
+        summarise(value = sum(event_cashflow), .groups = "drop"), by="event_time") %>%
+      left_join(discount_rate, by=c("event_time"="t")) %>%
+      mutate(value = replace_na(value, 0), rate = replace_na(rate, 0),
+             lag_rate = replace_na(lag(rate), 0),
+             value_time = 0.0)
+    for (i in seq_len(nrow(timeline))) {
+      timeline$value_time[i] <- if (i == 1) timeline$value[i] else
+        timeline$value_time[i-1] * (1 + timeline$lag_rate[i]) + timeline$value[i]
     }
-    
-    balance_plot <- timeline %>%
-      mutate(
-        direction = ifelse(value_time >= 0, "up", "down")
-      ) %>% 
-      ggplot(aes(x = event_time, y = value_time)) +
-      # geom_area(fill = "green")  +
-      geom_col(aes(fill = direction)) +
-      scale_fill_discrete(name = "")+
-      scale_y_continuous(
-        labels = function(x)
-          paste0("€", x / 1000, "k"),
-        name = "Stanje prihrankov"
-      ) +
-      scale_x_continuous(name = "Leto modela") +
-      theme_minimal()+
-      theme(
-        legend.position = "none"
-      )
-    
-    return(list("event_plot" = event_plot, "balance_plot" = balance_plot))
-    
+    timeline <- timeline %>%
+      mutate(net_flows = cumsum(value),
+             return_effect = value_time - net_flows)
+    balance_plot <- ggplot(timeline, aes(x=event_time)) +
+      geom_hline(yintercept=0, color="#cbd5e1", linewidth=.3) +
+      geom_line(aes(y=value_time, color="Skupno stanje"), linewidth=1.1) +
+      geom_line(aes(y=net_flows, color="Neto denarni tokovi"), linewidth=.85, linetype="dashed") +
+      scale_color_manual(values=c("Skupno stanje"="#245b7b",
+                                  "Neto denarni tokovi"="#b17f48"), name=NULL) +
+      scale_y_continuous(labels=function(x) paste0(format(round(x), big.mark=" ", scientific=FALSE), " €"),
+                         name="Evri") +
+      scale_x_continuous(name="Leto modela") +
+      theme_minimal(base_size=12) +
+      theme(legend.position="bottom", panel.grid.minor=element_blank())
+    return(list(event_plot=event_plot, balance_plot=balance_plot, timeline=timeline))
   }
   
   ### LOGIC ####
@@ -628,6 +615,23 @@ server <- function(input, output, session) {
                    if (input$time_mode == "calendar") "Koledarsko leto" else "Leta od začetka",
         tickmode="array", tickvals=ticks, ticktext=display_year()(ticks)))
   }
+
+  model_results <- reactive({
+    req(length(rv$myList) > 0)
+    plot_events(rv$myList, var_rate()$rate)$timeline
+  })
+  euro_label <- function(x) {
+    paste0(format(round(x, 0), big.mark=" ", scientific=FALSE, trim=TRUE), " €")
+  }
+  output$final_balance <- renderText({
+    euro_label(tail(model_results()$value_time, 1))
+  })
+  output$net_contributions <- renderText({
+    euro_label(tail(model_results()$net_flows, 1))
+  })
+  output$total_returns <- renderText({
+    euro_label(tail(model_results()$return_effect, 1))
+  })
 
   output$balance_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
