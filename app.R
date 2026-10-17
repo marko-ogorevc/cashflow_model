@@ -51,6 +51,9 @@ ui <- fluidPage(
       .chart-card { border:1px solid var(--line); background:white; border-radius:13px; padding:15px 15px 4px; margin-bottom:15px; }
       .chart-heading { font-weight:730; font-size:15px; margin:0 0 6px; }
       .chart-note { font-size:12px; color:var(--muted); margin-bottom:4px; }
+      .literacy-note { max-width:900px; padding:3px 5px; color:#64748b; font-size:12px; line-height:1.6; }
+      .literacy-note strong { color:#334155; }
+      .literacy-note p { margin-top:5px; }
       .empty-help { font-size:12px; color:#64748b; margin:8px 0 0; }
       #event_list { white-space:pre-wrap; word-break:break-word; background:#f9fbff; border:1px solid #e4eaf3; border-radius:10px; padding:16px; min-height:150px; }
       @media(max-width:767px) { .container-fluid { padding:14px 12px 28px; } .panel-card { padding:15px; } }
@@ -132,6 +135,10 @@ ui <- fluidPage(
           )
       )
     )
+  ),
+  div(class="literacy-note",
+      strong("Dobro je vedeti"),
+      p("Rezultat je izračun na podlagi tvojih predpostavk, ne napoved. Model ne upošteva inflacije, davkov ali negotovosti donosov. Zato ga uporabljaj za primerjanje scenarijev.")
   )
 )
 
