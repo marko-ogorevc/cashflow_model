@@ -226,14 +226,16 @@ events_to_db <- function(event_list) {
 #plot events and cashflow and balance
 
 
-plot_events <- function(event_list, discount_rate) {
+plot_events <- function(event_list, discount_rate, borrowing_rate = 0.06) {
+  stopifnot(length(borrowing_rate) == 1, is.finite(borrowing_rate), borrowing_rate >= 0)
   events_db <- events_to_db(event_list)
   
   # Exclude the internal zero-flow scaffold from the displayed event chart.
   user_events <- events_db %>% filter(event_name != ".internal_timeline")
   event_plot <- ggplot(user_events, aes(x=event_time,y=event_cashflow)) +
     geom_hline(yintercept=0,color="#cbd5e1",linewidth=.4) +
-    geom_col(aes(fill=event_name),width=.8) +
+    geom_col(aes(fill=ifelse(event_cashflow>=0,"Prilivi","Odlivi")),width=.8) +
+    scale_fill_manual(values=c("Prilivi"="#4A9B83","Odlivi"="#C66B66"),name=NULL) +
     scale_y_continuous(labels=function(x) paste0(format(round(x),big.mark=" ",
       scientific=FALSE,trim=TRUE)," €"),name="Evri") +
     scale_x_continuous(name="Leto modela") +
@@ -247,7 +249,7 @@ plot_events <- function(event_list, discount_rate) {
                         aes(event_time,event_cashflow)) +
       geom_hline(yintercept=0,color="#cbd5e1") +
       scale_x_continuous(name="Leto modela") +
-      scale_y_continuous(name="Evri") + theme_minimal(base_size=12)
+      scale_y_continuous(name=NULL) + theme_minimal(base_size=12)
 
   timeline <- tibble(event_time = seq(min(events_db$event_time), max(events_db$event_time))) %>%
     left_join(events_db %>% group_by(event_time) %>%
@@ -255,20 +257,32 @@ plot_events <- function(event_list, discount_rate) {
     left_join(discount_rate, by=c("event_time"="t")) %>%
     mutate(value = replace_na(value, 0), rate = replace_na(rate, 0),
            lag_rate = replace_na(lag(rate), 0),
-           value_time = 0.0)
+           value_time = 0.0, investment_gain = 0.0, debt_interest = 0.0)
   for (i in seq_len(nrow(timeline))) {
-    timeline$value_time[i] <- if (i == 1) timeline$value[i] else
-      timeline$value_time[i-1] * (1 + timeline$lag_rate[i]) + timeline$value[i]
+    if (i == 1) {
+      timeline$value_time[i] <- timeline$value[i]
+    } else {
+      previous <- timeline$value_time[i-1]
+      if (previous < 0) {
+        timeline$debt_interest[i] <- -previous * borrowing_rate
+        timeline$value_time[i] <- previous - timeline$debt_interest[i] + timeline$value[i]
+      } else {
+        timeline$investment_gain[i] <- previous * timeline$lag_rate[i]
+        timeline$value_time[i] <- previous + timeline$investment_gain[i] + timeline$value[i]
+      }
+    }
   }
   timeline <- timeline %>%
     mutate(net_flows = cumsum(value),
+           cumulative_gains = cumsum(investment_gain),
+           cumulative_debt_interest = cumsum(debt_interest),
            return_effect = value_time - net_flows)
   balance_plot <- ggplot(timeline, aes(x=event_time)) +
     geom_hline(yintercept=0, color="#cbd5e1", linewidth=.3) +
     geom_line(aes(y=value_time, color="Skupno stanje"), linewidth=1.1) +
     geom_line(aes(y=net_flows, color="Neto denarni tokovi"), linewidth=.85, linetype="dashed") +
     scale_color_manual(values=c("Skupno stanje"="#245b7b",
-                                "Neto denarni tokovi"="#b17f48"), name=NULL) +
+                                "Neto denarni tokovi"="#4A9B83"), name=NULL) +
     scale_y_continuous(labels=function(x) paste0(format(round(x), big.mark=" ", scientific=FALSE), " €"),
                        name="Evri") +
     scale_x_continuous(name="Leto modela") +

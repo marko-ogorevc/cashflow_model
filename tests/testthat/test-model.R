@@ -63,3 +63,19 @@ test_that("calendar and age labels do not change underlying periods", {
   expect_equal((relative+30)-30,relative)
   expect_equal((relative+2026)-2026,relative)
 })
+
+test_that("negative balances accrue fixed borrowing interest", {
+  events <- c(base(3),list(event("loan",0,-1000)))
+  d <- plot_events(events,rates(3,.05),borrowing_rate=.10)$timeline
+  expect_equal(d$value_time,c(-1000,-1100,-1210,-1331),tolerance=1e-8)
+  expect_equal(tail(d$cumulative_debt_interest,1),331,tolerance=1e-8)
+  expect_equal(tail(d$cumulative_gains,1),0,tolerance=1e-8)
+})
+
+test_that("crossing from debt to assets switches return rate next period", {
+  events <- c(base(3),list(event("loan",0,-1000),event("repayment",2,1500)))
+  d <- plot_events(events,rates(3,.05),borrowing_rate=.10)$timeline
+  expect_equal(d$value_time,c(-1000,-1100,290,304.5),tolerance=1e-8)
+  expect_equal(sum(d$debt_interest),210,tolerance=1e-8)
+  expect_equal(sum(d$investment_gain),14.5,tolerance=1e-8)
+})

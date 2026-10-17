@@ -22,6 +22,7 @@ ui <- fluidPage(
   useShinyalert(),
   tags$head(
     tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
+    tags$script(src="i18n.js"),
     tags$style(HTML("
       :root { --ink:#17273d; --muted:#64748b; --line:#e3e9f2; --surface:#fff; }
       body { background:#fafbfc; }
@@ -48,6 +49,8 @@ ui <- fluidPage(
       .main-tabs .nav-tabs { border-bottom:1px solid #e4eaf3; margin-bottom:18px; }
       .main-tabs .nav-link { border:0; border-radius:8px; font-weight:650; color:#65758c; margin-right:8px; }
       .main-tabs .nav-link.active { background:#edf4f6; color:#245b7b; }
+      .intro-switch { margin-bottom:14px; }
+      .subtle-help {color:#64748b;font-size:12px;}
       .scenario-actions { display:flex; gap:8px; flex-wrap:wrap; }
       .scenario-actions .btn { flex:1; min-width:110px; }
       .scenario-actions .form-group { margin:0; }
@@ -71,7 +74,9 @@ ui <- fluidPage(
         h1("Moja finančna prihodnost", class = "app-title"),
         p("Preveri, kako varčevanje, večji izdatki in čas vplivajo na tvoje prihranke.", class = "app-subtitle")
       ),
-      span("Finančni načrt · preizkusna različica", class = "version-pill")
+      div(class="d-flex align-items-center gap-2",
+          selectInput("language",NULL,choices=c("Slovenščina"="sl","English"="en"),selected="sl",width="145px"),
+          span("Finančni načrt · preizkusna različica", class = "version-pill"))
   ),
   fluidRow(
     column(
@@ -116,6 +121,8 @@ ui <- fluidPage(
             column(4, textInput("event_end", "Do leta", placeholder = "30")),
             column(4, div(style="padding-top:25px;", actionButton("gen_period", "Izračunaj leto", class="btn-outline-secondary", width="100%")))
           ),
+          radioButtons("amount_frequency","Znesek je",choices=c("Letni"="annual","Mesečni"="monthly"),
+                       selected="annual",inline=TRUE),
           div(class="field-with-action",
               textInput("event_cashflow", "Letni znesek (€)", placeholder="npr. -12000"),
               actionButton("get_cashflow", "Izračunaj znesek", class="btn-outline-secondary")
@@ -127,7 +134,32 @@ ui <- fluidPage(
           p("Časovnica se pripravi samodejno. Prazno polje »Do leta« pomeni enkratni dogodek.", class="empty-help")
       ),
       div(class="panel-card",
-          h3("Donosnost prihrankov", class="panel-heading"),
+          h3("Naložbena strategija",class="panel-heading"),
+          radioButtons("model_mode",NULL,choices=c(
+            "Preprosto: delnice in obveznice"="simple",
+            "Napredno: ročne stopnje donosnosti"="advanced"),selected="simple"),
+          conditionalPanel("input.model_mode == 'simple'",
+            selectInput("asset_strategy","Strategija",choices=c(
+              "Postopni prehod k obveznicam"="glide",
+              "Samo delnice"="equities",
+              "Uravnoteženo (60 / 40)"="balanced",
+              "Samo obveznice"="bonds"),selected="glide"),
+            conditionalPanel("input.asset_strategy == 'glide'",
+              sliderInput("stock_begin","Začetni delež delnic (%)",min=0,max=100,value=80,step=5),
+              sliderInput("stock_finish","Končni delež delnic (%)",min=0,max=100,value=20,step=5)),
+            h4("Razporeditev naložb skozi čas",style="font-size:13px;font-weight:700;margin-top:14px;"),
+            plotlyOutput("allocation_plot",height="185px"),
+            p("Delnice / obveznice: od začetka do konca načrta.",class="subtle-help"),
+            p("Ilustrativna predpostavka: delnice 7 %, obveznice 3 % letno. Donos ni zagotovljen.",
+              class="subtle-help")
+          ),
+          sliderInput("borrowing_rate", "Letna obrestna mera zadolževanja (%)",
+                      min=0,max=20,value=6,step=.5),
+          p("Negativno stanje se samodejno obravnava kot dolg. Obrestna mera dolga je stalna.",
+            class="subtle-help"),
+          conditionalPanel("input.model_mode == 'advanced'",
+          div(
+          h3("Ročne predpostavke donosnosti",class="panel-heading"),
           p("Predpostavljena letna donosnost se med izbranimi leti postopno spreminja. Donosnost ni zagotovljena.", class="panel-description"),
           div(class="rate-row",
               fluidRow(column(8,sliderInput("r0", "Začetna donosnost",value=.05,min=0,max=.1,step=.005)),
@@ -141,22 +173,33 @@ ui <- fluidPage(
               fluidRow(column(8,sliderInput("r2","Končna donosnost",value=.01,min=0,max=.1,step=.005)),
                        column(4,numericInput("t2","Tretje leto",value=80,min=-10000,max=10000,step=1)))
           )
-      )
+      )))
     ),
     column(
       width = 8,
+      div(class="panel-card",
+          h3("Prikaz rezultatov",class="panel-heading"),
+          checkboxInput("real_values","V današnji kupni moči",FALSE),
+          conditionalPanel("input.real_values",
+            numericInput("inflation","Letna inflacija (%)",2,min=-10,max=30,step=.5)),
+          actionButton("save_comparison","Shrani trenutno projekcijo za primerjavo",
+                       class="btn-outline-secondary"),
+          actionButton("clear_comparison","Odstrani primerjavo",class="btn-outline-secondary"),
+          p("Shranjena primerjava se ohrani do konca seje ali ponovnega shranjevanja.",class="subtle-help")
+      ),
       div(class="panel-card main-tabs",
           tabsetPanel(
             tabPanel("Pregled",
                      fluidRow(
                        column(4, div(class="metric-card", span("Končno stanje"), strong(textOutput("final_balance", inline=TRUE)))),
                        column(4, div(class="metric-card", span("Neto denarni tokovi"), strong(textOutput("net_contributions", inline=TRUE)))),
-                       column(4, div(class="metric-card", span("Učinek donosnosti"), strong(textOutput("total_returns", inline=TRUE))))
+                       column(4, div(class="metric-card", span("Neto učinek obrestovanja"), strong(textOutput("total_returns", inline=TRUE))))
                      ),
                      div(class="chart-card",
                          h3("Stanje, denarni tokovi in donosnost",class="chart-heading"),
                          p("Primerjava skupnega stanja s kumulativnimi neto denarnimi tokovi. Razlika predstavlja učinek predpostavljene donosnosti.",class="chart-note"),
-                         plotlyOutput("balance_plot_output",height="260px")
+                         plotlyOutput("balance_plot_output",height="300px"),
+                         textOutput("comparison_summary")
                      ),
                      div(class="chart-card",
                          h3("Letni prilivi in izdatki",class="chart-heading"),
@@ -186,6 +229,10 @@ ui <- fluidPage(
 
 
 server <- function(input, output, session) {
+  observeEvent(input$language, {
+    session$sendCustomMessage("cashflow-language", input$language)
+  }, ignoreInit = FALSE)
+
   # All existing mathematical functions are loaded without altering their formulas.
   source('R/model.R', local = TRUE)
 
@@ -279,6 +326,15 @@ server <- function(input, output, session) {
                      t1=isolate(to_period()(input$t1)),
                      t2=isolate(to_period()(input$t2)))
       )
+      model$preferences <- list(
+        borrowing_rate=isolate(input$borrowing_rate),
+        model_mode=isolate(input$model_mode),
+        asset_strategy=isolate(input$asset_strategy),
+        stock_begin=isolate(input$stock_begin),
+        stock_finish=isolate(input$stock_finish),
+        inflation=isolate(input$inflation),
+        real_values=isolate(input$real_values)
+      )
       jsonlite::write_json(model,file,pretty=TRUE,auto_unbox=TRUE)
     }
   )
@@ -305,6 +361,34 @@ server <- function(input, output, session) {
           any(!is.finite(rvect)) || any(rvect[1:3]<0) ||
           any(rvect[1:3]>.1) || any(abs(rvect[4:6])>10000))
         stop("Neveljavne nastavitve scenarija.")
+      prefs <- model$preferences
+      if (!is.null(prefs) && !is.null(prefs$borrowing_rate)) {
+        loan <- as.numeric(prefs$borrowing_rate)
+        if (length(loan)!=1 || !is.finite(loan) || loan<0 || loan>20)
+          stop("Neveljavna obrestna mera zadolževanja.")
+        updateSliderInput(session,"borrowing_rate",value=loan)
+      }
+      if (!is.null(prefs)) {
+        pm <- prefs$model_mode
+        ps <- prefs$asset_strategy
+        if (!pm %in% c("simple","advanced") ||
+            !ps %in% c("glide","equities","balanced","bonds"))
+          stop("Neveljavna naložbena strategija.")
+        numeric_prefs <- c(stock_begin=as.numeric(prefs$stock_begin),
+          stock_finish=as.numeric(prefs$stock_finish),
+          inflation=as.numeric(prefs$inflation))
+        if (any(!is.finite(numeric_prefs)) ||
+            any(numeric_prefs[c("stock_begin","stock_finish")]<0) ||
+            any(numeric_prefs[c("stock_begin","stock_finish")]>100) ||
+            abs(numeric_prefs["inflation"])>30)
+          stop("Neveljavne naložbene ali inflacijske predpostavke.")
+        updateRadioButtons(session,"model_mode",selected=pm)
+        updateSelectInput(session,"asset_strategy",selected=ps)
+        updateSliderInput(session,"stock_begin",value=numeric_prefs["stock_begin"])
+        updateSliderInput(session,"stock_finish",value=numeric_prefs["stock_finish"])
+        updateNumericInput(session,"inflation",value=numeric_prefs["inflation"])
+        updateCheckboxInput(session,"real_values",value=isTRUE(prefs$real_values))
+      }
       # Apply a different display origin only after all numeric inputs are validated.
       updateRadioButtons(session,"time_mode",selected=d$mode)
       updateNumericInput(session,"starting_age",value=age)
@@ -323,6 +407,10 @@ server <- function(input, output, session) {
                                    text=conditionMessage(e)))
   })
 
+  comparison <- reactiveVal(NULL)
+  observeEvent(input$save_comparison, { comparison(display_results()) })
+  observeEvent(input$clear_comparison, { comparison(NULL) })
+
   # Model periods are always relative to the beginning; display is a reversible mapping.
   origin <- reactive({
     if (input$time_mode == "age") return(as.numeric(input$starting_age))
@@ -336,8 +424,16 @@ server <- function(input, output, session) {
     function(display_value) as.numeric(display_value) - origin()
   })
   output$timeline_description <- renderText({
-    paste0("Prikaz od ", display_year()(0), " do ",
-           display_year()(input$horizon), if (input$time_mode == "calendar") "." else " let")
+    english <- identical(input$language, "en")
+    first <- display_year()(0)
+    last <- display_year()(input$horizon)
+    if (english) {
+      paste0("Display from ", first, " to ", last,
+             if (input$time_mode == "calendar") "." else " years")
+    } else {
+      paste0("Prikaz od ", first, " do ", last,
+             if (input$time_mode == "calendar") "." else " let")
+    }
   })
   observeEvent(input$horizon, {
     req(is.finite(input$horizon), input$horizon >= 1, input$horizon <= 150)
@@ -378,7 +474,8 @@ server <- function(input, output, session) {
               as.numeric(input$event_end)
             ))
           ),
-          event_cashflow = as.numeric(input$event_cashflow)
+          event_cashflow = as.numeric(input$event_cashflow) *
+            if (identical(input$amount_frequency,"monthly")) 12 else 1
         )
       
       updateTextInput(session, "event_name", value = "")
@@ -428,7 +525,7 @@ server <- function(input, output, session) {
       updateTextInput(
         session,
         "event_cashflow",
-        value = get_yearly_investment(
+        value = (get_yearly_investment(
           event_list = rv$myList,
           event_time = seq(
             from = to_period()(input$event_start),
@@ -439,7 +536,7 @@ server <- function(input, output, session) {
             ))
           ),
           discount_rate = var_rate()$rate
-        )
+        )) / if (identical(input$amount_frequency,"monthly")) 12 else 1
       )
     }
     
@@ -477,7 +574,56 @@ server <- function(input, output, session) {
     previous_origin(new_origin)
   }, ignoreInit=FALSE)
 
+  allocation_data <- reactive({
+    req(input$horizon, input$asset_strategy)
+    years <- 0:as.integer(input$horizon)
+    start <- if (input$asset_strategy=="equities") 100 else
+      if (input$asset_strategy=="bonds") 0 else
+      if (input$asset_strategy=="balanced") 60 else input$stock_begin
+    finish <- if (input$asset_strategy=="glide") input$stock_finish else start
+    stocks <- pmax(0,pmin(100,start+(finish-start)*years/max(1,input$horizon)))
+    tibble(t=years, stocks=stocks, bonds=100-stocks)
+  })
+  output$allocation_plot <- renderPlotly({
+    d <- allocation_data()
+    english <- identical(input$language,"en")
+    stock_name <- if (english) "Stocks" else "Delnice"
+    bond_name <- if (english) "Bonds" else "Obveznice"
+    p <- plotly::plot_ly(d, x=~t) %>%
+      plotly::add_trace(y=~stocks, type="scatter", mode="lines", stackgroup="one",
+        name=stock_name, line=list(width=0.5,color="#4A9B83"),
+        fillcolor="#4A9B83", hovertemplate=paste0("%{y:.0f}%<extra>",stock_name,"</extra>")) %>%
+      plotly::add_trace(y=~bonds, type="scatter", mode="lines", stackgroup="one",
+        name=bond_name,line=list(width=0.5,color="#91A4AB"),
+        fillcolor="#91A4AB",hovertemplate=paste0("%{y:.0f}%<extra>",bond_name,"</extra>"))
+    ticks <- pretty(range(d$t),n=5)
+    ticks <- ticks[ticks>=min(d$t) & ticks<=max(d$t)]
+    plotly::layout(p,
+      xaxis=list(title=list(text=""),tickmode="array",tickvals=ticks,
+                 ticktext=display_year()(ticks),showgrid=FALSE,zeroline=FALSE),
+      yaxis=list(title=list(text=""),range=c(0,100),ticksuffix="%",
+                 dtick=25,zeroline=FALSE),
+      margin=list(l=38,r=8,t=4,b=35),
+      legend=list(orientation="h",x=.5,xanchor="center",y=-.22),
+      paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)")
+  })
+
   var_rate = reactive({
+    if (identical(input$model_mode,"simple")) {
+      years <- seq(min(events_to_db(rv$myList)$event_time),
+                   max(events_to_db(rv$myList)$event_time))
+      total <- max(1,input$horizon)
+      start <- if (input$asset_strategy=="equities") 100 else
+               if (input$asset_strategy=="bonds") 0 else
+               if (input$asset_strategy=="balanced") 60 else input$stock_begin
+      finish <- if (input$asset_strategy=="glide") input$stock_finish else start
+      share <- pmax(0,pmin(100,start+(finish-start)*years/total))/100
+      rate_data <- tibble(t=years,rate=share*.07+(1-share)*.03)
+      return(list(rate=rate_data,
+                  rate_plot=ggplot(rate_data,aes(t,rate))+geom_line(color="#245b7b")+
+                  scale_y_continuous(labels=scales::percent)+labs(x="Leto modela",y="Donosnost")+
+                  theme_minimal()))
+    }
     get_var_rate(
       period = if (length(rv$myList) > 0) range(events_to_db(rv$myList)$event_time) else c(0, 100),
       r0 = input$r0,
@@ -489,38 +635,88 @@ server <- function(input, output, session) {
     )
   })
   
-  format_time_axis <- function(plot_object) {
+  # Explicit tick labels avoid Plotly's scientific notation (e.g. 2e+05).
+  euro_axis <- function(x) {
+    vapply(x, function(v) {
+      if (abs(v) < 1e-8) return("0 €")
+      if (abs(v) >= 1e6) return(paste0(format(round(v/1e6, 1), trim=TRUE, scientific=FALSE), "m €"))
+      if (abs(v) >= 1000) return(paste0(format(round(v/1000, 0), trim=TRUE, scientific=FALSE), "k €"))
+      paste0(format(round(v, 0), trim=TRUE, scientific=FALSE), " €")
+    }, character(1))
+  }
+  format_time_axis <- function(plot_object, money = FALSE) {
     times <- range(events_to_db(rv$myList)$event_time)
     ticks <- pretty(times, n=7)
     ticks <- ticks[ticks >= times[1] & ticks <= times[2]]
-    plotly::layout(plot_object,
-      xaxis=list(title=if (input$time_mode == "age") "Starost" else
-                   if (input$time_mode == "calendar") "Koledarsko leto" else "Leta od začetka",
-        tickmode="array", tickvals=ticks, ticktext=display_year()(ticks)))
+    opts <- list(xaxis=list(title=list(text=""), tickmode="array",
+                       tickvals=ticks, ticktext=display_year()(ticks)),
+                 legend=list(orientation="h", x=.5, xanchor="center", y=-.19),
+                 margin=list(l=65,r=18,t=12,b=58),
+                 paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)")
+    if (money) {
+      yvalues <- unlist(lapply(plot_object$x$data, function(tr) as.numeric(tr$y)))
+      yvalues <- yvalues[is.finite(yvalues)]
+      if (length(yvalues)) {
+        yticks <- pretty(range(c(0,yvalues)),n=5)
+        opts$yaxis <- list(title=list(text=""),tickmode="array",
+                           tickvals=yticks,ticktext=euro_axis(yticks),
+                           zeroline=TRUE,zerolinecolor="#d3dce4")
+      }
+    } else opts$yaxis <- list(title=list(text=""))
+    do.call(plotly::layout,c(list(p=plot_object),opts))
   }
 
   model_results <- reactive({
     req(length(rv$myList) > 0)
-    plot_events(rv$myList, var_rate()$rate)$timeline
+    plot_events(rv$myList, var_rate()$rate, borrowing_rate=input$borrowing_rate/100)$timeline
   })
   euro_label <- function(x) {
     paste0(format(round(x, 0), big.mark=" ", scientific=FALSE, trim=TRUE), " €")
   }
   output$final_balance <- renderText({
-    euro_label(tail(model_results()$value_time, 1))
+    euro_label(tail(display_results()$value_time, 1))
   })
   output$net_contributions <- renderText({
-    euro_label(tail(model_results()$net_flows, 1))
+    euro_label(tail(display_results()$net_flows, 1))
   })
   output$total_returns <- renderText({
-    euro_label(tail(model_results()$return_effect, 1))
+    euro_label(tail(display_results()$return_effect, 1))
   })
 
+  display_results <- reactive({
+    d <- model_results()
+    if (isTRUE(input$real_values)) {
+      factor <- (1+input$inflation/100)^d$event_time
+      d$value_time <- d$value_time/factor
+      d$net_flows <- d$net_flows/factor
+      d$return_effect <- d$value_time-d$net_flows
+    }
+    d
+  })
+  output$comparison_summary <- renderText({
+    old <- comparison()
+    if (is.null(old)) return("Za primerjavo shrani trenutno projekcijo in spremeni predpostavke.")
+    now <- tail(display_results()$value_time,1)
+    prior <- tail(old$value_time,1)
+    paste0("Razlika glede na shranjeni scenarij: ",euro_label(now-prior))
+  })
   output$balance_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
-      my_plots <- plot_events(rv$myList, var_rate()$rate)
+      my_plots <- plot_events(rv$myList, var_rate()$rate, borrowing_rate=input$borrowing_rate/100)
       
-      format_time_axis(ggplotly(my_plots$balance_plot))
+      d <- display_results()
+      graph <- ggplot(d,aes(event_time)) +
+        geom_line(aes(y=value_time,color="Trenutni scenarij"),linewidth=1.25) +
+        geom_line(aes(y=net_flows,color="Neto tokovi"),linewidth=.8,linetype="dashed") +
+        scale_color_manual(values=c("Trenutni scenarij"="#245B7B","Neto tokovi"="#4A9B83",
+                                   "Primerjava"="#8995A5"),name=NULL) +
+        labs(x=NULL,y=NULL)+theme_minimal()+
+        theme(legend.position="bottom")
+      prior <- comparison()
+      if (!is.null(prior))
+        graph <- graph+geom_line(data=prior,aes(x=event_time,y=value_time,
+            color="Primerjava"),linetype="dotted",inherit.aes=FALSE)
+      format_time_axis(ggplotly(graph), money=TRUE)
       
     }
   })
@@ -528,16 +724,34 @@ server <- function(input, output, session) {
   
   output$cashflow_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
-      my_plots <- plot_events(rv$myList, var_rate()$rate)
+      my_plots <- plot_events(rv$myList, var_rate()$rate, borrowing_rate=input$borrowing_rate/100)
       
-      format_time_axis(ggplotly(my_plots$event_plot))
+      chart <- ggplotly(my_plots$event_plot)
+      # Plotly trace names are created by ggplotly, not by the HTML translator.
+      # Translate at render time so language changes invalidate this plot.
+      lang <- input$language
+      if (identical(lang, "en")) {
+        for (i in seq_along(chart$x$data)) {
+          trace <- chart$x$data[[i]]
+          if (!is.null(trace$name)) {
+            trace$name <- gsub("Prilivi", "Inflows", trace$name, fixed=TRUE)
+            trace$name <- gsub("Odlivi", "Outflows", trace$name, fixed=TRUE)
+          }
+          if (!is.null(trace$hovertemplate)) {
+            trace$hovertemplate <- gsub("Prilivi", "Inflows", trace$hovertemplate, fixed=TRUE)
+            trace$hovertemplate <- gsub("Odlivi", "Outflows", trace$hovertemplate, fixed=TRUE)
+          }
+          chart$x$data[[i]] <- trace
+        }
+      }
+      format_time_axis(chart, money=TRUE)
       
     }
   })
   
   output$interest_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
-      format_time_axis(ggplotly(var_rate()$rate_plot))
+      format_time_axis(ggplotly(var_rate()$rate_plot), money=FALSE)
       
     }
   })

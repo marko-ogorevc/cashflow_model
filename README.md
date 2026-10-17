@@ -87,3 +87,7 @@ Pri uvozu uporabljaj datoteke iz zaupanja vrednih virov.
 ## Razvoj
 
 Projekt je nastal kot R Shiny prototip leta 2023, prenovljen za predstavitev v letu 2026. Nadaljnji razvoj naj izhaja iz povratnih informacij uporabnikov in dogovorjenega namena orodja.
+
+## Jezikovni preklop (razvojna različica)
+
+V glavi aplikacije je izbira **Slovenščina / English**. Preklop prevaja oznake in razlage v uporabniškem vmesniku, vključno z dinamično prikazanimi elementi. Finančni podatki in rezultati ostanejo nespremenjeni. Preveriti je treba še celoten prevod obvestil in oznak grafov pri vseh uporabniških poteh.
