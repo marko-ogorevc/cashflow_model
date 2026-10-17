@@ -594,12 +594,22 @@ server <- function(input, output, session) {
   }, striped = TRUE, bordered = FALSE, spacing = "s", digits = 2)
   
   
-  # The breakpoint controls are displayed in the selected time scale,
-  # while all calculations use periods counted from the plan's start.
-  observeEvent(list(input$time_mode, input$starting_age, input$starting_year), {
-    updateNumericInput(session, "t0", value=display_year()(50))
-    updateNumericInput(session, "t1", value=display_year()(60))
-    updateNumericInput(session, "t2", value=display_year()(80))
+  # Translate breakpoint inputs when the user's time origin changes.
+  # Preserve the underlying relative breakpoints, including user edits.
+  previous_origin <- reactiveVal(0)
+  observeEvent(origin(), {
+    new_origin <- origin()
+    old_origin <- previous_origin()
+    shift <- new_origin - old_origin
+    if (is.finite(shift) && shift != 0) {
+      for (id in c("t0", "t1", "t2")) {
+        current <- input[[id]]
+        if (!is.null(current) && is.finite(current)) {
+          updateNumericInput(session, id, value=current + shift)
+        }
+      }
+    }
+    previous_origin(new_origin)
   }, ignoreInit=FALSE)
 
   var_rate = reactive({
