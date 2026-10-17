@@ -578,13 +578,16 @@ server <- function(input, output, session) {
   })
   output$allocation_plot <- renderPlotly({
     d <- allocation_data()
+    english <- identical(input$language,"en")
+    stock_name <- if (english) "Stocks" else "Delnice"
+    bond_name <- if (english) "Bonds" else "Obveznice"
     p <- plotly::plot_ly(d, x=~t) %>%
       plotly::add_trace(y=~stocks, type="scatter", mode="lines", stackgroup="one",
-        name="Delnice", line=list(width=0.5,color="#4A9B83"),
-        fillcolor="#4A9B83", hovertemplate="%{y:.0f}%<extra>Delnice</extra>") %>%
+        name=stock_name, line=list(width=0.5,color="#4A9B83"),
+        fillcolor="#4A9B83", hovertemplate=paste0("%{y:.0f}%<extra>",stock_name,"</extra>")) %>%
       plotly::add_trace(y=~bonds, type="scatter", mode="lines", stackgroup="one",
-        name="Obveznice",line=list(width=0.5,color="#91A4AB"),
-        fillcolor="#91A4AB",hovertemplate="%{y:.0f}%<extra>Obveznice</extra>")
+        name=bond_name,line=list(width=0.5,color="#91A4AB"),
+        fillcolor="#91A4AB",hovertemplate=paste0("%{y:.0f}%<extra>",bond_name,"</extra>"))
     ticks <- pretty(range(d$t),n=5)
     ticks <- ticks[ticks>=min(d$t) & ticks<=max(d$t)]
     plotly::layout(p,
