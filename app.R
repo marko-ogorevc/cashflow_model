@@ -70,6 +70,19 @@ ui <- fluidPage(
     column(
       width = 4,
       div(class = "panel-card",
+          h3("Časovna os", class="panel-heading"),
+          p("Izberi oznake let. Izračun ostane enak.", class="panel-description"),
+          radioButtons("time_mode", NULL,
+            choices=c("Leta od začetka"="relative", "Starost"="age", "Koledarska leta"="calendar"),
+            selected="relative", inline=FALSE),
+          conditionalPanel("input.time_mode == 'age'",
+            numericInput("starting_age", "Trenutna starost", value=30, min=0, max=120, step=1)),
+          conditionalPanel("input.time_mode == 'calendar'",
+            numericInput("starting_year", "Začetno leto", value=2026, min=1900, max=2200, step=1)),
+          numericInput("horizon", "Trajanje načrta (let)", value=40, min=1, max=150, step=1),
+          textOutput("timeline_description")
+      ),
+      div(class = "panel-card",
           h3("Prihodki in izdatki", class = "panel-heading"),
           p("Vnesi letne zneske v evrih: prilivi so pozitivni, izdatki negativni. Za mesečni znesek ga najprej pomnoži z 12.", class = "panel-description"),
           div(class = "field-with-action",
@@ -89,7 +102,7 @@ ui <- fluidPage(
               actionButton("ok_button", "Dodaj", class="btn-primary"),
               actionButton("delete_list", "Počisti", class="btn-outline-secondary")
           ),
-          p("Časovnica od 0 do 80 let je že pripravljena. Prazno polje »Do leta« pomeni enkratni dogodek.", class="empty-help")
+          p("Časovnica se pripravi samodejno. Prazno polje »Do leta« pomeni enkratni dogodek.", class="empty-help")
       ),
       div(class="panel-card",
           h3("Donosnost prihrankov", class="panel-heading"),
@@ -129,7 +142,7 @@ ui <- fluidPage(
             ),
             tabPanel("Moji vnosi",
                      h3("Vneseni dogodki",class="chart-heading"),
-                     p("Začetna časovnica 0–80 let je samodejna in ni prikazana na seznamu.",class="chart-note"),
+                     p("Časovnica se ustvari samodejno in ni prikazana med dogodki.",class="chart-note"),
                      tableOutput("event_list")
             )
           )
@@ -449,14 +462,43 @@ server <- function(input, output, session) {
   
   # A zero-cashflow scaffold keeps the 0–80-year horizon visible.
   # It is internal to the model and is not an editable user event.
-  initial_timeline <- function() {
+  initial_timeline <- function(horizon = 40) {
     list(list(
       event_name = ".internal_timeline",
-      event_time = 0:80,
+      event_time = 0:as.integer(horizon),
       event_cashflow = 0
     ))
   }
   rv$myList <- initial_timeline()
+
+  # Model periods are always relative to the beginning; display is a reversible mapping.
+  origin <- reactive({
+    if (input$time_mode == "age") return(as.numeric(input$starting_age))
+    if (input$time_mode == "calendar") return(as.numeric(input$starting_year))
+    0
+  })
+  display_year <- reactive({
+    function(period) period + origin()
+  })
+  to_period <- reactive({
+    function(display_value) as.numeric(display_value) - origin()
+  })
+  output$timeline_description <- renderText({
+    paste0("Prikaz od ", display_year()(0), " do ",
+           display_year()(input$horizon), if (input$time_mode == "calendar") "." else " let")
+  })
+  observeEvent(input$horizon, {
+    req(is.finite(input$horizon), input$horizon >= 1, input$horizon <= 150)
+    events <- Filter(function(x) x$event_name != ".internal_timeline", rv$myList)
+    rv$myList <- c(initial_timeline(input$horizon), events)
+  }, ignoreInit=TRUE)
+
+  # Placeholders are examples only; actual conversion happens when data are submitted.
+  observeEvent(list(input$time_mode, input$starting_age, input$starting_year), {
+    updateTextInput(session, "event_start", placeholder=as.character(display_year()(0)))
+    updateTextInput(session, "event_end", placeholder=as.character(display_year()(input$horizon)))
+  }, ignoreInit=FALSE)
+
   
   observeEvent(input$ok_button, {
     if (input$event_name == "" |
@@ -477,8 +519,8 @@ server <- function(input, output, session) {
         add_event(
           event_name = input$event_name,
           event_time = seq(
-            from = as.numeric(input$event_start),
-            to = as.numeric(ifelse(
+            from = to_period()(input$event_start),
+            to = to_period()(ifelse(
               input$event_end == "",
               as.numeric(input$event_start),
               as.numeric(input$event_end)
@@ -497,7 +539,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$delete_list, {
-    rv$myList <- initial_timeline()
+    rv$myList <- initial_timeline(input$horizon)
     
     
   })
@@ -512,12 +554,12 @@ server <- function(input, output, session) {
       updateTextInput(
         session,
         "event_end",
-        value = get_period(
+        value = display_year()(get_period(
           event_list = rv$myList,
-          event_time = as.numeric(input$event_start),
+          event_time = to_period()(input$event_start),
           event_cashflow = as.numeric(input$event_cashflow),
           discount_rate = var_rate()$rate
-        )
+        ))
       )
       
       
@@ -537,8 +579,8 @@ server <- function(input, output, session) {
         value = get_yearly_investment(
           event_list = rv$myList,
           event_time = seq(
-            from = as.numeric(input$event_start),
-            to = as.numeric(ifelse(
+            from = to_period()(input$event_start),
+            to = to_period()(ifelse(
               input$event_end == "",
               as.numeric(input$event_start),
               as.numeric(input$event_end)
@@ -558,8 +600,8 @@ server <- function(input, output, session) {
     if (length(user_events) == 0) return(NULL)
     tibble(
       Dogodek = vapply(user_events, function(x) as.character(x$event_name), character(1)),
-      Od = vapply(user_events, function(x) min(x$event_time), numeric(1)),
-      Do = vapply(user_events, function(x) max(x$event_time), numeric(1)),
+      Od = vapply(user_events, function(x) display_year()(min(x$event_time)), numeric(1)),
+      Do = vapply(user_events, function(x) display_year()(max(x$event_time)), numeric(1)),
       `Letni znesek (€)` = vapply(user_events, function(x) as.numeric(x$event_cashflow[1]), numeric(1))
     )
   }, striped = TRUE, bordered = FALSE, spacing = "s", digits = 2)
@@ -577,11 +619,21 @@ server <- function(input, output, session) {
     )
   })
   
+  format_time_axis <- function(plot_object) {
+    times <- range(events_to_db(rv$myList)$event_time)
+    ticks <- pretty(times, n=7)
+    ticks <- ticks[ticks >= times[1] & ticks <= times[2]]
+    plotly::layout(plot_object,
+      xaxis=list(title=if (input$time_mode == "age") "Starost" else
+                   if (input$time_mode == "calendar") "Koledarsko leto" else "Leta od začetka",
+        tickmode="array", tickvals=ticks, ticktext=display_year()(ticks)))
+  }
+
   output$balance_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
       my_plots <- plot_events(rv$myList, var_rate()$rate)
       
-      ggplotly(my_plots$balance_plot)
+      format_time_axis(ggplotly(my_plots$balance_plot))
       
     }
   })
@@ -591,14 +643,14 @@ server <- function(input, output, session) {
     if (length(rv$myList) > 0) {
       my_plots <- plot_events(rv$myList, var_rate()$rate)
       
-      ggplotly(my_plots$event_plot)
+      format_time_axis(ggplotly(my_plots$event_plot))
       
     }
   })
   
   output$interest_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
-      ggplotly(var_rate()$rate_plot)
+      format_time_axis(ggplotly(var_rate()$rate_plot))
       
     }
   })
@@ -635,8 +687,8 @@ server <- function(input, output, session) {
     event_info <- get_event_info(isolate(input$list_events), isolate(rv$myList))
     
     updateTextInput(session, "event_name", value = event_info[[1]]$event_name)
-    updateTextInput(session, "event_start", value = min(event_info[[1]]$event_time))
-    updateTextInput(session, "event_end", value =  max(event_info[[1]]$event_time))
+    updateTextInput(session, "event_start", value = display_year()(min(event_info[[1]]$event_time)))
+    updateTextInput(session, "event_end", value = display_year()(max(event_info[[1]]$event_time)))
     updateTextInput(session, "event_cashflow", value = event_info[[1]]$event_cashflow)
     rv$myList <- remove_event(input$list_events, rv$myList)
     
