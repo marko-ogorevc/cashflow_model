@@ -79,3 +79,28 @@ test_that("crossing from debt to assets switches return rate next period", {
   expect_equal(sum(d$debt_interest),210,tolerance=1e-8)
   expect_equal(sum(d$investment_gain),14.5,tolerance=1e-8)
 })
+
+test_that("inverse amount solver uses debt rate and reproduces zero balance", {
+  events <- c(base(2),list(event("debt",0,-1000)))
+  amount <- get_yearly_investment(events,1:2,rates(2,.05),borrowing_rate=.10)
+  expect_equal(amount,1210/2.1,tolerance=1e-6)
+  final <- plot_events(c(events,list(event("solved",1:2,amount))),
+                       rates(2,.05),borrowing_rate=.10)$timeline
+  expect_equal(tail(final$value_time,1),0,tolerance=1e-5)
+})
+
+test_that("inverse year solver uses debt rate and agrees with simulation", {
+  events <- c(base(2),list(event("debt",0,-1000)))
+  year <- get_period(events,1,700,rates(2,.05),borrowing_rate=.10)
+  expect_equal(year,2)
+  final <- plot_events(c(events,list(event("solved",1:year,700))),
+                       rates(2,.05),borrowing_rate=.10)$timeline
+  expect_gte(tail(final$value_time,1),0)
+})
+
+test_that("inverse solvers handle a switch from debt to investment earnings", {
+  events <- c(base(3),list(event("debt",0,-500)))
+  amount <- get_yearly_investment(events,1:3,rates(3,.08),borrowing_rate=.12)
+  result <- simulate_final_balance(events,rates(3,.08),.12,1:3,amount)
+  expect_equal(result,0,tolerance=1e-5)
+})
