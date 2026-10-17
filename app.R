@@ -153,6 +153,10 @@ ui <- fluidPage(
             p("Ilustrativna predpostavka: delnice 7 %, obveznice 3 % letno. Donos ni zagotovljen.",
               class="subtle-help")
           ),
+          sliderInput("borrowing_rate", "Letna obrestna mera zadolževanja (%)",
+                      min=0,max=20,value=6,step=.5),
+          p("Negativno stanje se samodejno obravnava kot dolg. Obrestna mera dolga je stalna.",
+            class="subtle-help"),
           conditionalPanel("input.model_mode == 'advanced'",
           div(
           h3("Ročne predpostavke donosnosti",class="panel-heading"),
@@ -189,7 +193,7 @@ ui <- fluidPage(
                      fluidRow(
                        column(4, div(class="metric-card", span("Končno stanje"), strong(textOutput("final_balance", inline=TRUE)))),
                        column(4, div(class="metric-card", span("Neto denarni tokovi"), strong(textOutput("net_contributions", inline=TRUE)))),
-                       column(4, div(class="metric-card", span("Učinek donosnosti"), strong(textOutput("total_returns", inline=TRUE))))
+                       column(4, div(class="metric-card", span("Neto učinek obrestovanja"), strong(textOutput("total_returns", inline=TRUE))))
                      ),
                      div(class="chart-card",
                          h3("Stanje, denarni tokovi in donosnost",class="chart-heading"),
@@ -323,6 +327,7 @@ server <- function(input, output, session) {
                      t2=isolate(to_period()(input$t2)))
       )
       model$preferences <- list(
+        borrowing_rate=isolate(input$borrowing_rate),
         model_mode=isolate(input$model_mode),
         asset_strategy=isolate(input$asset_strategy),
         stock_begin=isolate(input$stock_begin),
@@ -357,6 +362,12 @@ server <- function(input, output, session) {
           any(rvect[1:3]>.1) || any(abs(rvect[4:6])>10000))
         stop("Neveljavne nastavitve scenarija.")
       prefs <- model$preferences
+      if (!is.null(prefs) && !is.null(prefs$borrowing_rate)) {
+        loan <- as.numeric(prefs$borrowing_rate)
+        if (length(loan)!=1 || !is.finite(loan) || loan<0 || loan>20)
+          stop("Neveljavna obrestna mera zadolževanja.")
+        updateSliderInput(session,"borrowing_rate",value=loan)
+      }
       if (!is.null(prefs)) {
         pm <- prefs$model_mode
         ps <- prefs$asset_strategy
@@ -646,7 +657,7 @@ server <- function(input, output, session) {
 
   model_results <- reactive({
     req(length(rv$myList) > 0)
-    plot_events(rv$myList, var_rate()$rate)$timeline
+    plot_events(rv$myList, var_rate()$rate, borrowing_rate=input$borrowing_rate/100)$timeline
   })
   euro_label <- function(x) {
     paste0(format(round(x, 0), big.mark=" ", scientific=FALSE, trim=TRUE), " €")
@@ -680,7 +691,7 @@ server <- function(input, output, session) {
   })
   output$balance_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
-      my_plots <- plot_events(rv$myList, var_rate()$rate)
+      my_plots <- plot_events(rv$myList, var_rate()$rate, borrowing_rate=input$borrowing_rate/100)
       
       d <- display_results()
       graph <- ggplot(d,aes(event_time)) +
@@ -702,7 +713,7 @@ server <- function(input, output, session) {
   
   output$cashflow_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
-      my_plots <- plot_events(rv$myList, var_rate()$rate)
+      my_plots <- plot_events(rv$myList, var_rate()$rate, borrowing_rate=input$borrowing_rate/100)
       
       format_time_axis(ggplotly(my_plots$event_plot), money=TRUE)
       
