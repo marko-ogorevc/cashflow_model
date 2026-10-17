@@ -112,15 +112,15 @@ ui <- fluidPage(
           p("Predpostavljena letna donosnost se med izbranimi leti postopno spreminja. Donosnost ni zagotovljena.", class="panel-description"),
           div(class="rate-row",
               fluidRow(column(8,sliderInput("r0", "Začetna donosnost",value=.05,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t0","Prvo leto",value=50,min=0,max=100,step=1)))
+                       column(4,numericInput("t0","Prvo leto",value=50,min=NULL,max=NULL,step=1)))
           ),
           div(class="rate-row",
               fluidRow(column(8,sliderInput("r1","Vmesna donosnost",value=.025,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t1","Drugo leto",value=60,min=0,max=100,step=1)))
+                       column(4,numericInput("t1","Drugo leto",value=60,min=NULL,max=NULL,step=1)))
           ),
           div(class="rate-row",
               fluidRow(column(8,sliderInput("r2","Končna donosnost",value=.01,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t2","Tretje leto",value=80,min=0,max=100,step=1)))
+                       column(4,numericInput("t2","Tretje leto",value=80,min=NULL,max=NULL,step=1)))
           )
       )
     ),
@@ -594,15 +594,23 @@ server <- function(input, output, session) {
   }, striped = TRUE, bordered = FALSE, spacing = "s", digits = 2)
   
   
+  # The breakpoint controls are displayed in the selected time scale,
+  # while all calculations use periods counted from the plan's start.
+  observeEvent(list(input$time_mode, input$starting_age, input$starting_year), {
+    updateNumericInput(session, "t0", value=display_year()(50))
+    updateNumericInput(session, "t1", value=display_year()(60))
+    updateNumericInput(session, "t2", value=display_year()(80))
+  }, ignoreInit=FALSE)
+
   var_rate = reactive({
     get_var_rate(
       period = if (length(rv$myList) > 0) range(events_to_db(rv$myList)$event_time) else c(0, 100),
       r0 = input$r0,
-      t0 = input$t0,
+      t0 = to_period()(input$t0),
       r1 = input$r1,
-      t1 = input$t1,
+      t1 = to_period()(input$t1),
       r2 = input$r2,
-      t2 = input$t2
+      t2 = to_period()(input$t2)
     )
   })
   
