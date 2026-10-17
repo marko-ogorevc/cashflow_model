@@ -507,7 +507,8 @@ server <- function(input, output, session) {
           event_list = rv$myList,
           event_time = to_period()(input$event_start),
           event_cashflow = as.numeric(input$event_cashflow),
-          discount_rate = var_rate()$rate
+          discount_rate = var_rate()$rate,
+          borrowing_rate = input$borrowing_rate/100
         ))
       )
       
@@ -535,7 +536,8 @@ server <- function(input, output, session) {
               as.numeric(input$event_end)
             ))
           ),
-          discount_rate = var_rate()$rate
+          discount_rate = var_rate()$rate,
+          borrowing_rate = input$borrowing_rate/100
         )) / if (identical(input$amount_frequency,"monthly")) 12 else 1
       )
     }
