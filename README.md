@@ -25,3 +25,23 @@ All values are illustrative; the model uses deterministic returns, with no taxes
 ## Development status
 
 The `redesign-v1` branch contains a first UI refresh using bslib and Bootstrap 5. Core numerical functions are inherited from the December 2023 prototype, and have **not yet been validated with automated tests**. Review numerical edge cases before relying on results. Existing hosted Shiny deployments are not updated automatically when this branch changes.
+
+## Demonstration scenarios
+
+On the `feature/demo-polish` branch, use the **Scenariji** panel to load:
+
+- **Dolgoročno varčevanje**: initial savings plus recurring deposits
+- **Večji prihodnji izdatek**: saving with a single substantial expense
+- **Različni denarni tokovi**: deposits, withdrawals, and one-off events
+
+The scenario selector replaces the current events when **Naloži primer** is clicked.
+
+## Save and restore
+
+**Shrani JSON** downloads the current scenario, including events, horizon, time-display selection, and return assumptions. **Naloži shranjeni JSON** restores a supported file locally; no database is required. The JSON file uses relative model periods, so age and calendar labels can change without changing event timing.
+
+Only load files from trusted sources. A maximum 2 MB file size and structural validation are enforced.
+
+## Development
+
+The GitHub feature branch is not automatically published to shinyapps.io. Run the Shiny application locally to verify interactive imports and exports before merge. The existing numerical model tests can be run with `testthat::test_file("tests/testthat/test-model.R")`.
