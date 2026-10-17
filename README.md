@@ -1,27 +1,87 @@
-# Cashflow model
+# Cashflow Model
 
-An interactive financial cashflow simulator built in R Shiny. Add one-off and recurring cashflows, specify time-varying annual return assumptions, and inspect projected account balances and cashflows.
+**Interaktivni simulator denarnih tokov in dolgoročnih finančnih scenarijev.**
 
-## Run locally
+Cashflow Model omogoča raziskovanje, kako enkratni in ponavljajoči se prilivi, odlivi ter časovno spremenljive stopnje donosnosti vplivajo na finančno stanje skozi čas. Namenjen je tako začetnikom kot uporabnikom, ki želijo oblikovati podrobnejše scenarije.
 
-Open `cashflow_model.Rproj` in RStudio and install the packages:
+> Model je ponazoritev na podlagi uporabnikovih predpostavk, ne finančna napoved ali naložbeno priporočilo.
+
+## Kaj omogoča
+
+- **Poljubni denarni tokovi:** enkratni in ponavljajoči se prilivi ter odlivi.
+- **Trije prikazi časa:** leta od začetka, starost ali koledarska leta.
+- **Časovno spremenljiva donosnost:** tri nastavljive stopnje s prehodi med prelomnimi leti.
+- **Interaktivni grafi:** stanje, kumulativni neto denarni tokovi, letni tokovi in donosnost.
+- **Obratni izračuni:** potreben letni znesek ali obdobje za zastavljeni finančni cilj.
+- **Pripravljeni primeri:** dolgoročno varčevanje, večji prihodnji izdatek in mešani denarni tokovi.
+- **Shranjevanje in nalaganje scenarijev:** prenos načrta v JSON in ponovni uvoz brez uporabniškega računa.
+
+## Hitri začetek
+
+1. Izberi **pripravljeni scenarij** ali začni s praznim načrtom.
+2. Določi, ali želiš čas prikazati kot leta od začetka, starost ali koledarska leta.
+3. Dodaj ali spremeni denarne tokove (pozitivni zneski so prilivi, negativni odlivi).
+4. Prilagodi stopnje donosnosti in spremljaj grafe ter ključne kazalnike.
+5. Po želji načrt **shrani v JSON** in ga kasneje ponovno naloži.
+
+**Opomba:** vneseni denarni tokovi so *letni zneski*. Za ponavljajoči se mesečni znesek vnesi njegov letni ekvivalent (12-kratnik). Leto 0 je začetek simulacije.
+
+## Pripravljeni scenariji
+
+| Primer | Vsebinska zasnova |
+| --- | --- |
+| Dolgoročno varčevanje | 5.000 € začetnega vložka in 2.400 € letno v naslednjih 40 letih |
+| Večji prihodnji izdatek | 20.000 € začetnih prihrankov, 3.000 € letno in izdatek 35.000 € v 12. letu |
+| Različni denarni tokovi | Vplačila, enkratni prejemek, strošek in kasnejši dvigi |
+
+Primeri so ilustrativni in jih je mogoče spremeniti.
+
+## Zagon v RStudiu
+
+Zahtevan je R in dostop do CRAN. Odpri `cashflow_model.Rproj`, nato namesti potrebne pakete:
 
 ```r
-install.packages(c("shiny", "bslib", "plotly", "shinyalert", "rlist",
-                   "gridExtra", "tidyverse", "jsonlite"))
+install.packages(c(
+  "shiny", "bslib", "plotly", "shinyalert",
+  "rlist", "gridExtra", "tidyverse", "jsonlite", "testthat"
+))
 shiny::runApp()
 ```
 
-## How to use
+### Samodejni testi
 
-1. Enter an event label, starting year, optional ending year, and cashflow in euros. Positive values represent inflows; negative values represent outflows.
-2. Choose **Add event** to add it to the calculation.
-3. Adjust the three return assumptions and breakpoints.
-4. Review account balance, annual cashflows and expected return in the Overview tab.
-5. Use **Solve amount** to calculate the constant annual contribution for an entered period, or **Solve end** for an estimated end year, based on the events already added.
+```r
+testthat::test_file("tests/testthat/test-model.R")
+```
 
-All values are illustrative; the model uses deterministic returns, with no taxes, inflation adjustment or stochastic risk modelling.
+Referenčni testi preverjajo osnovne finančne izračune, med drugim enkratni vložek, redna vplačila, spremenljivo donosnost in obratna izračuna. Uspešni osnovni testi še ne pomenijo popolne validacije vseh možnih scenarijev.
 
-## Development status
+## Struktura projekta
 
-The `redesign-v1` branch contains a first UI refresh using bslib and Bootstrap 5. Core numerical functions are inherited from the December 2023 prototype, and have **not yet been validated with automated tests**. Review numerical edge cases before relying on results. Existing hosted Shiny deployments are not updated automatically when this branch changes.
+```text
+app.R                        # vmesnik in Shiny strežniška logika
+R/model.R                    # finančne funkcije in priprava grafov
+tests/testthat/test-model.R  # referenčni izračuni in testi
+```
+
+## Računske predpostavke
+
+Denarni tok v posameznem letu se prišteje **po** obračunu donosnosti na stanje iz predhodnega obdobja. Začetni vložek pri času 0 zato lahko ustvarja donos od naslednjega obdobja naprej.
+
+Kazalnik *učinek donosnosti* pomeni razliko med skupnim stanjem in kumulativnimi neto denarnimi tokovi. Učinek je lahko tudi negativen. Model v trenutni obliki ne vključuje inflacije, davkov, transakcijskih stroškov, stohastičnih donosov ali tveganja neplačila.
+
+## Shranjevanje scenarijev
+
+JSON vsebuje dogodke, trajanje načrta, način prikaza časovne osi ter predpostavke donosnosti. Obdobja dogodkov so shranjena relativno glede na začetek modela; sprememba med prikazom starosti, koledarskega leta in relativnih let ne spremeni njihovega ekonomskega časa.
+
+Pri uvozu uporabljaj datoteke iz zaupanja vrednih virov.
+
+## Spletna predstavitev
+
+Prvotna objava: [Cashflow Model na shinyapps.io](https://markoogorevc.shinyapps.io/Cashflow_model/).
+
+**Objava se ne posodobi samodejno ob spremembah GitHuba.** Povezava lahko zato prikazuje starejšo različico od kode v tem repozitoriju.
+
+## Razvoj
+
+Projekt je nastal kot R Shiny prototip leta 2023, prenovljen za predstavitev v letu 2026. Nadaljnji razvoj naj izhaja iz povratnih informacij uporabnikov in dogovorjenega namena orodja.

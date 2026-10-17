@@ -48,6 +48,10 @@ ui <- fluidPage(
       .main-tabs .nav-tabs { border-bottom:1px solid #e4eaf3; margin-bottom:18px; }
       .main-tabs .nav-link { border:0; border-radius:8px; font-weight:650; color:#65758c; margin-right:8px; }
       .main-tabs .nav-link.active { background:#edf4f6; color:#245b7b; }
+      .scenario-actions { display:flex; gap:8px; flex-wrap:wrap; }
+      .scenario-actions .btn { flex:1; min-width:110px; }
+      .scenario-actions .form-group { margin:0; }
+      .scenario-help { font-size:12px; color:#64748b; line-height:1.6; }
       .metric-card { background:#fff; border:1px solid var(--line); border-radius:11px; margin-bottom:15px; padding:15px; min-height:90px; } 
       .metric-card span { display:block; color:#64748b; font-size:12px; margin-bottom:8px; }
       .metric-card strong { display:block; color:#17273d; font-size:clamp(18px,2vw,25px); font-weight:750; }
@@ -72,6 +76,21 @@ ui <- fluidPage(
   fluidRow(
     column(
       width = 4,
+      div(class="panel-card",
+          h3("Scenariji", class="panel-heading"),
+          p("Začni s pripravljenim primerom ali shrani svoj načrt.", class="panel-description"),
+          selectInput("example_scenario", "Pripravljeni primer",
+            choices=c("Izberi primer ..."="", "Dolgoročno varčevanje"="saving",
+                      "Večji prihodnji izdatek"="expense",
+                      "Različni denarni tokovi"="mixed"), selected=""),
+          actionButton("load_example", "Naloži primer", class="btn-primary", width="100%"),
+          tags$hr(),
+          div(class="scenario-actions",
+              downloadButton("save_scenario", "Shrani JSON", class="btn-outline-secondary"),
+              fileInput("open_scenario", "Naloži shranjeni JSON", accept=c(".json","application/json"))
+          ),
+          p("Nalaganje zamenja trenutni načrt. Datoteka ostane na tvoji napravi.", class="scenario-help")
+      ),
       div(class = "panel-card",
           h3("Časovna os", class="panel-heading"),
           p("Izberi oznake let. Izračun ostane enak.", class="panel-description"),
@@ -185,6 +204,124 @@ server <- function(input, output, session) {
     ))
   }
   rv$myList <- initial_timeline()
+
+  # Scenario files save periods relative to the start, independently of display labels.
+  scenario_events <- function(x) {
+    if (!is.list(x)) stop("Neveljaven seznam dogodkov.")
+    lapply(x, function(e) {
+      if (!is.list(e) || !all(c("event_name","event_time","event_cashflow") %in% names(e)))
+        stop("Dogodek nima zahtevanih polj.")
+      nm <- e$event_name
+      tt <- unlist(e$event_time, use.names=FALSE)
+      v <- unlist(e$event_cashflow, use.names=FALSE)
+      if (!is.character(nm) || length(nm)!=1 || is.na(nm) ||
+          !nzchar(nm) || identical(nm,".internal_timeline") ||
+          !is.numeric(tt) || !length(tt) || any(!is.finite(tt)) ||
+          any(tt != round(tt)) || length(tt)>1000 ||
+          !is.numeric(v) || length(v)!=1 || !is.finite(v) ||
+          any(abs(tt)>10000))
+        stop("Dogodek vsebuje neveljavne podatke.")
+      list(event_name=nm,event_time=as.numeric(tt),event_cashflow=as.numeric(v))
+    })
+  }
+
+  example_data <- function(which) {
+    switch(which,
+      saving=list(horizon=40, events=list(
+        list(event_name="Začetni prihranki",event_time=0,event_cashflow=5000),
+        list(event_name="Redno letno varčevanje",event_time=1:40,event_cashflow=2400))),
+      expense=list(horizon=30, events=list(
+        list(event_name="Začetni prihranki",event_time=0,event_cashflow=20000),
+        list(event_name="Letno varčevanje",event_time=1:30,event_cashflow=3000),
+        list(event_name="Večji nakup",event_time=12,event_cashflow=-35000))),
+      mixed=list(horizon=45, events=list(
+        list(event_name="Začetni vložek",event_time=0,event_cashflow=15000),
+        list(event_name="Redno vlaganje",event_time=1:25,event_cashflow=4000),
+        list(event_name="Enkratni strošek",event_time=8,event_cashflow=-18000),
+        list(event_name="Dodatni prejemek",event_time=20,event_cashflow=25000),
+        list(event_name="Letni dvigi",event_time=30:45,event_cashflow=-6000))),
+      stop("Najprej izberi primer.")
+    )
+  }
+
+  apply_scenario <- function(scenario) {
+    events <- scenario_events(scenario$events)
+    horizon <- as.numeric(scenario$horizon)
+    if (length(horizon)!=1 || !is.finite(horizon) || horizon<1 ||
+        horizon>150 || horizon!=round(horizon) || length(events)>200)
+      stop("Neveljavno trajanje načrta ali preveč dogodkov.")
+    updateNumericInput(session, "horizon", value=horizon)
+    rv$myList <- c(initial_timeline(horizon), events)
+    invisible(NULL)
+  }
+
+  observeEvent(input$load_example, {
+    if (identical(input$example_scenario,"")) {
+      shinyalert(title="Izberi primer",text="Izberi enega od pripravljenih scenarijev.")
+      return()
+    }
+    tryCatch(apply_scenario(example_data(input$example_scenario)),
+      error=function(e) shinyalert(title="Napaka",text=conditionMessage(e)))
+  })
+
+  output$save_scenario <- downloadHandler(
+    filename=function() paste0("cashflow-scenario-",Sys.Date(),".json"),
+    content=function(file) {
+      events <- Filter(function(e) e$event_name!=".internal_timeline",isolate(rv$myList))
+      model <- list(
+        format="cashflow-model",version=1,horizon=isolate(input$horizon),
+        events=events,
+        display=list(mode=isolate(input$time_mode),
+                     starting_age=isolate(input$starting_age),
+                     starting_year=isolate(input$starting_year)),
+        returns=list(r0=isolate(input$r0),r1=isolate(input$r1),r2=isolate(input$r2),
+                     t0=isolate(to_period()(input$t0)),
+                     t1=isolate(to_period()(input$t1)),
+                     t2=isolate(to_period()(input$t2)))
+      )
+      jsonlite::write_json(model,file,pretty=TRUE,auto_unbox=TRUE)
+    }
+  )
+  observeEvent(input$open_scenario, {
+    tryCatch({
+      if (is.null(input$open_scenario$size) || input$open_scenario$size>2e6)
+        stop("Datoteka je prevelika (največ 2 MB).")
+      model <- jsonlite::read_json(input$open_scenario$datapath,simplifyVector=FALSE)
+      if (!identical(model$format,"cashflow-model") ||
+          !identical(as.numeric(model$version),1))
+        stop("Datoteka ni podprt scenarij Cashflow Model.")
+      # Validate all content before changing UI or reactive state.
+      events <- scenario_events(model$events)
+      h <- as.numeric(model$horizon)
+      if (length(h)!=1 || !is.finite(h) || h<1 || h>150 ||
+          h!=round(h) || length(events)>200) stop("Neveljavno trajanje načrta.")
+      d <- model$display; rt <- model$returns
+      if (!d$mode %in% c("relative","age","calendar")) stop("Neveljaven prikaz časa.")
+      age <- as.numeric(d$starting_age); year <- as.numeric(d$starting_year)
+      rvect <- vapply(rt[c("r0","r1","r2","t0","t1","t2")],
+                      function(v) as.numeric(v), numeric(1))
+      if (length(age)!=1 || !is.finite(age) || age<0 || age>120 ||
+          length(year)!=1 || !is.finite(year) || year<1900 || year>2200 ||
+          any(!is.finite(rvect)) || any(rvect[1:3]<0) ||
+          any(rvect[1:3]>.1) || any(abs(rvect[4:6])>10000))
+        stop("Neveljavne nastavitve scenarija.")
+      # Apply a different display origin only after all numeric inputs are validated.
+      updateRadioButtons(session,"time_mode",selected=d$mode)
+      updateNumericInput(session,"starting_age",value=age)
+      updateNumericInput(session,"starting_year",value=year)
+      updateNumericInput(session,"horizon",value=h)
+      updateSliderInput(session,"r0",value=rvect[1])
+      updateSliderInput(session,"r1",value=rvect[2])
+      updateSliderInput(session,"r2",value=rvect[3])
+      new_origin <- if (d$mode=="age") age else if (d$mode=="calendar") year else 0
+      for (i in seq_along(c("t0","t1","t2")))
+        updateNumericInput(session,c("t0","t1","t2")[i],value=rvect[i+3]+new_origin)
+      previous_origin(new_origin)
+      rv$myList <- c(initial_timeline(h),events)
+      shinyalert(title="Scenarij naložen",text="Načrt je uspešno obnovljen.")
+    },error=function(e) shinyalert(title="Scenarija ni bilo mogoče naložiti",
+                                   text=conditionMessage(e)))
+  })
 
   # Model periods are always relative to the beginning; display is a reversible mapping.
   origin <- reactive({
