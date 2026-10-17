@@ -48,6 +48,8 @@ ui <- fluidPage(
       .main-tabs .nav-tabs { border-bottom:1px solid #e4eaf3; margin-bottom:18px; }
       .main-tabs .nav-link { border:0; border-radius:8px; font-weight:650; color:#65758c; margin-right:8px; }
       .main-tabs .nav-link.active { background:#edf4f6; color:#245b7b; }
+      .intro-switch { margin-bottom:14px; }
+      .subtle-help {color:#64748b;font-size:12px;}
       .scenario-actions { display:flex; gap:8px; flex-wrap:wrap; }
       .scenario-actions .btn { flex:1; min-width:110px; }
       .scenario-actions .form-group { margin:0; }
@@ -116,6 +118,8 @@ ui <- fluidPage(
             column(4, textInput("event_end", "Do leta", placeholder = "30")),
             column(4, div(style="padding-top:25px;", actionButton("gen_period", "Izračunaj leto", class="btn-outline-secondary", width="100%")))
           ),
+          radioButtons("amount_frequency","Znesek je",choices=c("Letni"="annual","Mesečni"="monthly"),
+                       selected="annual",inline=TRUE),
           div(class="field-with-action",
               textInput("event_cashflow", "Letni znesek (€)", placeholder="npr. -12000"),
               actionButton("get_cashflow", "Izračunaj znesek", class="btn-outline-secondary")
@@ -141,10 +145,20 @@ ui <- fluidPage(
               fluidRow(column(8,sliderInput("r2","Končna donosnost",value=.01,min=0,max=.1,step=.005)),
                        column(4,numericInput("t2","Tretje leto",value=80,min=-10000,max=10000,step=1)))
           )
-      )
+      ))
     ),
     column(
       width = 8,
+      div(class="panel-card",
+          h3("Prikaz rezultatov",class="panel-heading"),
+          checkboxInput("real_values","V današnji kupni moči",FALSE),
+          conditionalPanel("input.real_values",
+            numericInput("inflation","Letna inflacija (%)",2,min=-10,max=30,step=.5)),
+          actionButton("save_comparison","Shrani trenutno projekcijo za primerjavo",
+                       class="btn-outline-secondary"),
+          actionButton("clear_comparison","Odstrani primerjavo",class="btn-outline-secondary"),
+          p("Shranjena primerjava se ohrani do konca seje ali ponovnega shranjevanja.",class="subtle-help")
+      ),
       div(class="panel-card main-tabs",
           tabsetPanel(
             tabPanel("Pregled",
@@ -156,7 +170,8 @@ ui <- fluidPage(
                      div(class="chart-card",
                          h3("Stanje, denarni tokovi in donosnost",class="chart-heading"),
                          p("Primerjava skupnega stanja s kumulativnimi neto denarnimi tokovi. Razlika predstavlja učinek predpostavljene donosnosti.",class="chart-note"),
-                         plotlyOutput("balance_plot_output",height="260px")
+                         plotlyOutput("balance_plot_output",height="300px"),
+                         textOutput("comparison_summary")
                      ),
                      div(class="chart-card",
                          h3("Letni prilivi in izdatki",class="chart-heading"),
@@ -323,6 +338,10 @@ server <- function(input, output, session) {
                                    text=conditionMessage(e)))
   })
 
+  comparison <- reactiveVal(NULL)
+  observeEvent(input$save_comparison, { comparison(model_results()) })
+  observeEvent(input$clear_comparison, { comparison(NULL) })
+
   # Model periods are always relative to the beginning; display is a reversible mapping.
   origin <- reactive({
     if (input$time_mode == "age") return(as.numeric(input$starting_age))
@@ -378,7 +397,8 @@ server <- function(input, output, session) {
               as.numeric(input$event_end)
             ))
           ),
-          event_cashflow = as.numeric(input$event_cashflow)
+          event_cashflow = as.numeric(input$event_cashflow) *
+            if (identical(input$amount_frequency,"monthly")) 12 else 1
         )
       
       updateTextInput(session, "event_name", value = "")
@@ -478,6 +498,21 @@ server <- function(input, output, session) {
   }, ignoreInit=FALSE)
 
   var_rate = reactive({
+    if (identical(input$model_mode,"simple")) {
+      years <- seq(min(events_to_db(rv$myList)$event_time),
+                   max(events_to_db(rv$myList)$event_time))
+      total <- max(1,input$horizon)
+      start <- if (input$asset_strategy=="equities") 100 else
+               if (input$asset_strategy=="bonds") 0 else
+               if (input$asset_strategy=="balanced") 60 else input$stock_begin
+      finish <- if (input$asset_strategy=="glide") input$stock_finish else start
+      share <- pmax(0,pmin(100,start+(finish-start)*years/total))/100
+      rate_data <- tibble(t=years,rate=share*.07+(1-share)*.03)
+      return(list(rate=rate_data,
+                  rate_plot=ggplot(rate_data,aes(t,rate))+geom_line(color="#245b7b")+
+                  scale_y_continuous(labels=scales::percent)+labs(x="Leto modela",y="Donosnost")+
+                  theme_minimal()))
+    }
     get_var_rate(
       period = if (length(rv$myList) > 0) range(events_to_db(rv$myList)$event_time) else c(0, 100),
       r0 = input$r0,
@@ -507,20 +542,49 @@ server <- function(input, output, session) {
     paste0(format(round(x, 0), big.mark=" ", scientific=FALSE, trim=TRUE), " €")
   }
   output$final_balance <- renderText({
-    euro_label(tail(model_results()$value_time, 1))
+    euro_label(tail(display_results()$value_time, 1))
   })
   output$net_contributions <- renderText({
-    euro_label(tail(model_results()$net_flows, 1))
+    euro_label(tail(display_results()$net_flows, 1))
   })
   output$total_returns <- renderText({
-    euro_label(tail(model_results()$return_effect, 1))
+    euro_label(tail(display_results()$return_effect, 1))
   })
 
+  display_results <- reactive({
+    d <- model_results()
+    if (isTRUE(input$real_values)) {
+      factor <- (1+input$inflation/100)^d$event_time
+      d$value_time <- d$value_time/factor
+      d$net_flows <- d$net_flows/factor
+      d$return_effect <- d$value_time-d$net_flows
+    }
+    d
+  })
+  output$comparison_summary <- renderText({
+    old <- comparison()
+    if (is.null(old)) return("Za primerjavo shrani trenutno projekcijo in spremeni predpostavke.")
+    now <- tail(display_results()$value_time,1)
+    prior <- tail(old$value_time,1)
+    paste0("Razlika glede na shranjeni scenarij: ",euro_label(now-prior))
+  })
   output$balance_plot_output <- renderPlotly({
     if (length(rv$myList) > 0) {
       my_plots <- plot_events(rv$myList, var_rate()$rate)
       
-      format_time_axis(ggplotly(my_plots$balance_plot))
+      d <- display_results()
+      graph <- ggplot(d,aes(event_time)) +
+        geom_line(aes(y=value_time,color="Trenutni scenarij"),linewidth=1.1) +
+        geom_line(aes(y=net_flows,color="Neto tokovi"),linetype="dashed") +
+        scale_color_manual(values=c("Trenutni scenarij"="#245b7b","Neto tokovi"="#b17f48",
+                                   "Primerjava"="#8091a6"),name=NULL) +
+        labs(x="Leto modela",y="Evri")+theme_minimal()+
+        theme(legend.position="bottom")
+      prior <- comparison()
+      if (!is.null(prior))
+        graph <- graph+geom_line(data=prior,aes(x=event_time,y=value_time,
+            color="Primerjava"),linetype="dotted",inherit.aes=FALSE)
+      format_time_axis(ggplotly(graph))
       
     }
   })
