@@ -131,7 +131,25 @@ ui <- fluidPage(
           p("Časovnica se pripravi samodejno. Prazno polje »Do leta« pomeni enkratni dogodek.", class="empty-help")
       ),
       div(class="panel-card",
-          h3("Donosnost prihrankov", class="panel-heading"),
+          h3("Naložbena strategija",class="panel-heading"),
+          radioButtons("model_mode",NULL,choices=c(
+            "Preprosto: delnice in obveznice"="simple",
+            "Napredno: ročne stopnje donosnosti"="advanced"),selected="simple"),
+          conditionalPanel("input.model_mode == 'simple'",
+            selectInput("asset_strategy","Strategija",choices=c(
+              "Postopni prehod k obveznicam"="glide",
+              "Samo delnice"="equities",
+              "Uravnoteženo (60 / 40)"="balanced",
+              "Samo obveznice"="bonds"),selected="glide"),
+            conditionalPanel("input.asset_strategy == 'glide'",
+              sliderInput("stock_begin","Začetni delež delnic (%)",80,0,100,step=5),
+              sliderInput("stock_finish","Končni delež delnic (%)",20,0,100,step=5)),
+            p("Ilustrativna predpostavka: delnice 7 %, obveznice 3 % letno. Donos ni zagotovljen.",
+              class="subtle-help")
+          ),
+          conditionalPanel("input.model_mode == 'advanced'",
+          div(
+          h3("Ročne predpostavke donosnosti",class="panel-heading"),
           p("Predpostavljena letna donosnost se med izbranimi leti postopno spreminja. Donosnost ni zagotovljena.", class="panel-description"),
           div(class="rate-row",
               fluidRow(column(8,sliderInput("r0", "Začetna donosnost",value=.05,min=0,max=.1,step=.005)),
@@ -145,7 +163,7 @@ ui <- fluidPage(
               fluidRow(column(8,sliderInput("r2","Končna donosnost",value=.01,min=0,max=.1,step=.005)),
                        column(4,numericInput("t2","Tretje leto",value=80,min=-10000,max=10000,step=1)))
           )
-      ))
+      )))
     ),
     column(
       width = 8,
