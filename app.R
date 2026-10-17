@@ -22,6 +22,7 @@ ui <- fluidPage(
   useShinyalert(),
   tags$head(
     tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
+    tags$script(src="i18n.js"),
     tags$style(HTML("
       :root { --ink:#17273d; --muted:#64748b; --line:#e3e9f2; --surface:#fff; }
       body { background:#fafbfc; }
@@ -73,7 +74,9 @@ ui <- fluidPage(
         h1("Moja finančna prihodnost", class = "app-title"),
         p("Preveri, kako varčevanje, večji izdatki in čas vplivajo na tvoje prihranke.", class = "app-subtitle")
       ),
-      span("Finančni načrt · preizkusna različica", class = "version-pill")
+      div(class="d-flex align-items-center gap-2",
+          selectInput("language",NULL,choices=c("Slovenščina"="sl","English"="en"),selected="sl",width="145px"),
+          span("Finančni načrt · preizkusna različica", class = "version-pill"))
   ),
   fluidRow(
     column(
