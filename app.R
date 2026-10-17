@@ -11,9 +11,9 @@ library(jsonlite)
 app_theme <- bs_theme(
   version = 5,
   bootswatch = "flatly",
-  bg = "#f5f7fb",
+  bg = "#fafbfc",
   fg = "#17273d",
-  primary = "#2363d1",
+  primary = "#245b7b",
   base_font = font_google("Inter")
 )
 
@@ -24,22 +24,22 @@ ui <- fluidPage(
     tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
     tags$style(HTML("
       :root { --ink:#17273d; --muted:#64748b; --line:#e3e9f2; --surface:#fff; }
-      body { background:#f5f7fb; }
+      body { background:#fafbfc; }
       .container-fluid { max-width:1550px; padding:22px 26px 45px; }
       .app-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin:7px 0 23px; }
       .app-title { font-size:clamp(27px,3vw,37px); font-weight:780; letter-spacing:-.045em; margin:0; color:var(--ink); }
       .app-subtitle { color:var(--muted); font-size:14px; margin:5px 0 0; }
-      .version-pill { border:1px solid #cddbf3; border-radius:999px; color:#2363d1; background:#eef4ff; font-size:12px; padding:7px 12px; font-weight:650; }
-      .panel-card { background:#fff; border:1px solid var(--line); border-radius:15px; padding:20px; margin-bottom:17px; box-shadow:0 5px 22px rgba(28,51,90,.035); }
+      .version-pill { border:1px solid #cddbf3; border-radius:999px; color:#245b7b; background:#eef4ff; font-size:12px; padding:7px 12px; font-weight:650; }
+      .panel-card { background:#fff; border:1px solid var(--line); border-radius:11px; padding:20px; margin-bottom:17px; box-shadow:none; }
       .panel-heading { font-size:16px; font-weight:750; margin:0 0 5px; }
       .panel-description { font-size:12px; color:var(--muted); margin:0 0 18px; line-height:1.5; }
       .form-control { border-radius:9px; border-color:#dbe3ef; box-shadow:none; }
       .control-label { font-size:12px; font-weight:650; color:#40526d; }
       .btn { border-radius:9px; font-weight:650; }
-      .btn-primary { background:#2363d1; border-color:#2363d1; }
+      .btn-primary { background:#245b7b; border-color:#245b7b; }
       .btn-outline-secondary { color:#52657e; border-color:#ced8e7; }
       .action-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-      .action-row .btn { flex:1; min-width:120px; }
+      .action-row .btn { flex:1; min-width:105px; }
       .field-with-action { display:flex; align-items:flex-end; gap:9px; }
       .field-with-action .form-group { flex:1; min-width:0; }
       .field-with-action .btn { margin-bottom:15px; }
@@ -47,7 +47,7 @@ ui <- fluidPage(
       .rate-row:first-of-type { border-top:0; padding-top:0; }
       .main-tabs .nav-tabs { border-bottom:1px solid #e4eaf3; margin-bottom:18px; }
       .main-tabs .nav-link { border:0; border-radius:8px; font-weight:650; color:#65758c; margin-right:8px; }
-      .main-tabs .nav-link.active { background:#eaf1ff; color:#1e5fc8; }
+      .main-tabs .nav-link.active { background:#edf4f6; color:#245b7b; }
       .chart-card { border:1px solid var(--line); background:white; border-radius:13px; padding:15px 15px 4px; margin-bottom:15px; }
       .chart-heading { font-weight:730; font-size:15px; margin:0 0 6px; }
       .chart-note { font-size:12px; color:var(--muted); margin-bottom:4px; }
@@ -58,50 +58,50 @@ ui <- fluidPage(
   ),
   div(class = "app-header",
       div(
-        h1("Cashflow model", class = "app-title"),
-        p("Explore how cashflows and changing returns shape wealth over time.", class = "app-subtitle")
+        h1("Moja finančna prihodnost", class = "app-title"),
+        p("Preveri, kako varčevanje, večji izdatki in čas vplivajo na tvoje prihranke.", class = "app-subtitle")
       ),
-      span("Presentation edition · v1.0", class = "version-pill")
+      span("Finančni načrt · preizkusna različica", class = "version-pill")
   ),
   fluidRow(
     column(
       width = 4,
       div(class = "panel-card",
-          h3("Cashflow events", class = "panel-heading"),
-          p("Create one-off or recurring inflows and outflows. Use negative values for spending.", class = "panel-description"),
+          h3("Prihodki in izdatki", class = "panel-heading"),
+          p("Vnesi letne zneske v evrih: prilivi so pozitivni, izdatki negativni. Za mesečni znesek ga najprej pomnoži z 12.", class = "panel-description"),
           div(class = "field-with-action",
-              textInput("event_name", "Event label", placeholder = "e.g. Salary, savings, retirement"),
-              actionButton("gen_names", "Edit event", class = "btn-outline-secondary")
+              textInput("event_name", "Kaj se zgodi?", placeholder = "npr. letno varčevanje, nakup avtomobila"),
+              actionButton("gen_names", "Uredi vnos", class = "btn-outline-secondary")
           ),
           fluidRow(
-            column(4, textInput("event_start", "From (year)", placeholder = "0")),
-            column(4, textInput("event_end", "To (year)", placeholder = "30")),
-            column(4, div(style="padding-top:25px;", actionButton("gen_period", "Solve end", class="btn-outline-secondary", width="100%")))
+            column(4, textInput("event_start", "Od leta", placeholder = "0")),
+            column(4, textInput("event_end", "Do leta", placeholder = "30")),
+            column(4, div(style="padding-top:25px;", actionButton("gen_period", "Izračunaj leto", class="btn-outline-secondary", width="100%")))
           ),
           div(class="field-with-action",
-              textInput("event_cashflow", "Cashflow per year (€)", placeholder="e.g. -12000"),
-              actionButton("get_cashflow", "Solve amount", class="btn-outline-secondary")
+              textInput("event_cashflow", "Letni znesek (€)", placeholder="npr. -12000"),
+              actionButton("get_cashflow", "Izračunaj znesek", class="btn-outline-secondary")
           ),
           div(class="action-row",
-              actionButton("ok_button", "Add event", class="btn-primary"),
-              actionButton("delete_list", "Clear all", class="btn-outline-secondary")
+              actionButton("ok_button", "Dodaj", class="btn-primary"),
+              actionButton("delete_list", "Počisti", class="btn-outline-secondary")
           ),
-          p("Tip: leave 'To' blank for a single-year event.", class="empty-help")
+          p("Leta pomenijo zaporedna leta modela (0 = danes). Prazno polje »Do leta« pomeni enkratni dogodek.", class="empty-help")
       ),
       div(class="panel-card",
-          h3("Expected returns", class="panel-heading"),
-          p("Rates transition linearly between the selected breakpoints.", class="panel-description"),
+          h3("Donosnost prihrankov", class="panel-heading"),
+          p("Predpostavljena letna donosnost se med izbranimi leti postopno spreminja. Donosnost ni zagotovljena.", class="panel-description"),
           div(class="rate-row",
-              fluidRow(column(8,sliderInput("r0", "Initial annual rate",value=.05,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t0","First break",value=50,min=0,max=100,step=1)))
+              fluidRow(column(8,sliderInput("r0", "Začetna donosnost",value=.05,min=0,max=.1,step=.005)),
+                       column(4,numericInput("t0","Prvo leto",value=50,min=0,max=100,step=1)))
           ),
           div(class="rate-row",
-              fluidRow(column(8,sliderInput("r1","Middle annual rate",value=.025,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t1","Second break",value=60,min=0,max=100,step=1)))
+              fluidRow(column(8,sliderInput("r1","Vmesna donosnost",value=.025,min=0,max=.1,step=.005)),
+                       column(4,numericInput("t1","Drugo leto",value=60,min=0,max=100,step=1)))
           ),
           div(class="rate-row",
-              fluidRow(column(8,sliderInput("r2","Final annual rate",value=.01,min=0,max=.1,step=.005)),
-                       column(4,numericInput("t2","Third break",value=80,min=0,max=100,step=1)))
+              fluidRow(column(8,sliderInput("r2","Končna donosnost",value=.01,min=0,max=.1,step=.005)),
+                       column(4,numericInput("t2","Tretje leto",value=80,min=0,max=100,step=1)))
           )
       )
     ),
@@ -109,25 +109,25 @@ ui <- fluidPage(
       width = 8,
       div(class="panel-card main-tabs",
           tabsetPanel(
-            tabPanel("Overview",
+            tabPanel("Pregled",
                      div(class="chart-card",
-                         h3("Portfolio balance",class="chart-heading"),
-                         p("Projected account value after cashflows and investment returns.",class="chart-note"),
+                         h3("Kako se spreminjajo prihranki?",class="chart-heading"),
+                         p("Ponazoritev stanja po upoštevanju vnosov in predpostavljene donosnosti.",class="chart-note"),
                          plotlyOutput("balance_plot_output",height="260px")
                      ),
                      div(class="chart-card",
-                         h3("Annual cashflows",class="chart-heading"),
+                         h3("Letni prilivi in izdatki",class="chart-heading"),
                          plotlyOutput("cashflow_plot_output",height="230px")
                      ),
                      div(class="chart-card",
-                         h3("Expected return",class="chart-heading"),
+                         h3("Predpostavljena donosnost",class="chart-heading"),
                          plotlyOutput("interest_plot_output",height="210px")
                      )
             ),
-            tabPanel("Events",
-                     h3("Configured events",class="chart-heading"),
-                     p("Events are stored for the current browser session.",class="chart-note"),
-                     verbatimTextOutput("event_list")
+            tabPanel("Moji vnosi",
+                     h3("Vneseni dogodki",class="chart-heading"),
+                     p("Vnosi so na voljo samo med trenutno uporabo aplikacije.",class="chart-note"),
+                     tableOutput("event_list")
             )
           )
       )
@@ -204,12 +204,12 @@ server <- function(input, output, session) {
     rate_plot <- ggplot(var_rate, aes(x = t, y = rate)) +
       geom_line() +
       scale_y_continuous(
-        name = "Expected Returns",
+        name = "Letna donosnost",
         labels = function(x)
           scales::percent(x),
         limits = c(0, NA)
       ) +
-      scale_x_continuous(name = "Time",
+      scale_x_continuous(name = "Leto modela",
                          limits = c(period[1], period[2])) +
       theme_minimal()
     
@@ -376,10 +376,10 @@ server <- function(input, output, session) {
       scale_y_continuous(
         labels = function(x)
           paste0("€", x / 1000, "k"),
-        name = "Cashflow"
+        name = "Letni denarni tok"
       ) +
-      scale_x_continuous(name = "Time") +
-      scale_fill_discrete(name = "Event") +
+      scale_x_continuous(name = "Leto modela") +
+      scale_fill_discrete(name = "Dogodek") +
       theme_minimal()+
       theme(
         legend.position = "none"
@@ -423,9 +423,9 @@ server <- function(input, output, session) {
       scale_y_continuous(
         labels = function(x)
           paste0("€", x / 1000, "k"),
-        name = "Balance"
+        name = "Stanje prihrankov"
       ) +
-      scale_x_continuous(name = "Time") +
+      scale_x_continuous(name = "Leto modela") +
       theme_minimal()+
       theme(
         legend.position = "none"
@@ -446,13 +446,13 @@ server <- function(input, output, session) {
     if (input$event_name == "" |
         is.na(as.numeric(input$event_start)) |
         is.na(as.numeric(input$event_cashflow))) {
-      shinyalert(title = "fill missing forms",
+      shinyalert(title = "Preveri podatke",
                  text = {
                    case_when(
-                     input$event_name == "" ~ "Label",
+                     input$event_name == "" ~ "Ime dogodka",
                      
-                     is.na(as.numeric(input$event_start)) ~ "Event start (and end) as numeric",
-                     TRUE ~ "Cashflow (+ for inflow, - outflow)"
+                     is.na(as.numeric(input$event_start)) ~ "Začetno in končno leto morata biti števili",
+                     TRUE ~ "Vnesi znesek (pozitiven priliv, negativen izdatek)"
                    )
                  })
       
@@ -489,8 +489,8 @@ server <- function(input, output, session) {
   
   observeEvent(input$gen_period, {
     if (is.na(as.numeric(input$event_start))) {
-      shinyalert(title = "missing form data",
-                 text = "Must have start")
+      shinyalert(title = "Manjkajo podatki",
+                 text = "Vnesi začetno leto")
       
     } else {
       updateTextInput(
@@ -511,8 +511,8 @@ server <- function(input, output, session) {
   
   observeEvent(input$get_cashflow, {
     if (is.na(as.numeric(input$event_start))) {
-      shinyalert(title = "missing form data",
-                 text = "type from / to")
+      shinyalert(title = "Manjkajo podatki",
+                 text = "Vnesi začetno in končno leto")
       
     } else {
       updateTextInput(
@@ -537,9 +537,15 @@ server <- function(input, output, session) {
   })
   
   
-  output$event_list <- renderPrint({
-    toJSON(rv$myList, pretty = TRUE, auto_unbox = TRUE)
-  })
+  output$event_list <- renderTable({
+    if (length(rv$myList) == 0) return(NULL)
+    tibble(
+      Dogodek = vapply(rv$myList, function(x) as.character(x$event_name), character(1)),
+      Od = vapply(rv$myList, function(x) min(x$event_time), numeric(1)),
+      Do = vapply(rv$myList, function(x) max(x$event_time), numeric(1)),
+      `Letni znesek (€)` = vapply(rv$myList, function(x) as.numeric(x$event_cashflow[1]), numeric(1))
+    )
+  }, striped = TRUE, bordered = FALSE, spacing = "s", digits = 2)
   
   
   var_rate = reactive({
@@ -588,15 +594,15 @@ server <- function(input, output, session) {
       
       selectInput(
         inputId = "list_events",
-        label = "Select event",
+        label = "Izberi dogodek",
         selected = NULL,
         choices = get_event_names(rv$myList)
       ),
       footer=tagList(
         actionButton(
           inputId = "submit_name",
-          label = "Select"),
-        modalButton("Cancel")
+          label = "Izberi"),
+        modalButton("Prekliči")
       )
     ))
   })
