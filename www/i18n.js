@@ -22,6 +22,8 @@
     ["Letna obrestna mera zadolževanja (%)","Annual borrowing interest rate (%)"],
     ["Negativno stanje se samodejno obravnava kot dolg. Obrestna mera dolga je stalna.","A negative balance is treated as debt automatically. The borrowing rate is fixed."],
     ["Neto učinek obrestovanja","Net effect of interest and returns"],
+    ["Razporeditev naložb skozi čas","Investment allocation over time"],
+    ["Delnice / obveznice: od začetka do konca načrta.","Stocks / bonds: from the start to the end of the plan."],
     ["Naložbena strategija","Investment strategy"],["Preprosto: delnice in obveznice","Simple: stocks and bonds"],
     ["Napredno: ročne stopnje donosnosti","Advanced: custom return rates"],
     ["Strategija","Strategy"],["Postopni prehod k obveznicam","Gradual shift towards bonds"],
