@@ -89,7 +89,7 @@ ui <- fluidPage(
               actionButton("ok_button", "Dodaj", class="btn-primary"),
               actionButton("delete_list", "Počisti", class="btn-outline-secondary")
           ),
-          p("Leta pomenijo zaporedna leta modela (0 = danes). Prazno polje »Do leta« pomeni enkratni dogodek.", class="empty-help")
+          p("Časovnica od 0 do 80 let je že pripravljena. Prazno polje »Do leta« pomeni enkratni dogodek.", class="empty-help")
       ),
       div(class="panel-card",
           h3("Donosnost prihrankov", class="panel-heading"),
@@ -129,7 +129,7 @@ ui <- fluidPage(
             ),
             tabPanel("Moji vnosi",
                      h3("Vneseni dogodki",class="chart-heading"),
-                     p("Vnosi so na voljo samo med trenutno uporabo aplikacije.",class="chart-note"),
+                     p("Začetna časovnica 0–80 let je samodejna in ni prikazana na seznamu.",class="chart-note"),
                      tableOutput("event_list")
             )
           )
@@ -447,7 +447,16 @@ server <- function(input, output, session) {
   rv <- reactiveValues()
   
   
-  rv$myList <- list()
+  # A zero-cashflow scaffold keeps the 0–80-year horizon visible.
+  # It is internal to the model and is not an editable user event.
+  initial_timeline <- function() {
+    list(list(
+      event_name = ".internal_timeline",
+      event_time = 0:80,
+      event_cashflow = 0
+    ))
+  }
+  rv$myList <- initial_timeline()
   
   observeEvent(input$ok_button, {
     if (input$event_name == "" |
@@ -488,7 +497,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$delete_list, {
-    rv$myList <- list()
+    rv$myList <- initial_timeline()
     
     
   })
@@ -545,12 +554,13 @@ server <- function(input, output, session) {
   
   
   output$event_list <- renderTable({
-    if (length(rv$myList) == 0) return(NULL)
+    user_events <- Filter(function(x) x$event_name != ".internal_timeline", rv$myList)
+    if (length(user_events) == 0) return(NULL)
     tibble(
-      Dogodek = vapply(rv$myList, function(x) as.character(x$event_name), character(1)),
-      Od = vapply(rv$myList, function(x) min(x$event_time), numeric(1)),
-      Do = vapply(rv$myList, function(x) max(x$event_time), numeric(1)),
-      `Letni znesek (€)` = vapply(rv$myList, function(x) as.numeric(x$event_cashflow[1]), numeric(1))
+      Dogodek = vapply(user_events, function(x) as.character(x$event_name), character(1)),
+      Od = vapply(user_events, function(x) min(x$event_time), numeric(1)),
+      Do = vapply(user_events, function(x) max(x$event_time), numeric(1)),
+      `Letni znesek (€)` = vapply(user_events, function(x) as.numeric(x$event_cashflow[1]), numeric(1))
     )
   }, striped = TRUE, bordered = FALSE, spacing = "s", digits = 2)
   
@@ -595,6 +605,10 @@ server <- function(input, output, session) {
   
   #### get and modify events ####
   observeEvent(input$gen_names, {
+    if (length(rv$myList) <= 1) {
+      shinyalert(title = "Ni vnosov", text = "Najprej dodaj prihodek ali izdatek.")
+      return()
+    }
     # display a modal dialog with a header, textinput and action buttons
     showModal(modalDialog(
       
@@ -603,7 +617,7 @@ server <- function(input, output, session) {
         inputId = "list_events",
         label = "Izberi dogodek",
         selected = NULL,
-        choices = get_event_names(rv$myList)
+        choices = setdiff(get_event_names(rv$myList), ".internal_timeline")
       ),
       footer=tagList(
         actionButton(
