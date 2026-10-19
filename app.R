@@ -769,7 +769,9 @@ server <- function(input, output, session) {
     updateTextInput(session, "event_name", value = event_info[[1]]$event_name)
     updateTextInput(session, "event_start", value = display_year()(min(event_info[[1]]$event_time)))
     updateTextInput(session, "event_end", value = display_year()(max(event_info[[1]]$event_time)))
-    updateTextInput(session, "event_cashflow", value = event_info[[1]]$event_cashflow)
+    updateTextInput(session, "event_cashflow",
+      value = as.numeric(event_info[[1]]$event_cashflow) /
+        if (identical(input$amount_frequency,"monthly")) 12 else 1)
     rv$myList <- remove_event(input$list_events, rv$myList)
     
   })
