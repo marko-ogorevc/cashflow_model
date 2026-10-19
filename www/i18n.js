@@ -17,7 +17,7 @@
     ["Vnesi letne zneske v evrih: prilivi so pozitivni, izdatki negativni. Za mesečni znesek ga najprej pomnoži z 12.","Enter an annual amount in euros: inflows are positive and outflows negative."],
     ["Kaj se zgodi?","Event name"],["Uredi vnos","Edit event"],["Od leta","From year"],["Do leta","To year"],
     ["Izračunaj leto","Solve year"],["Znesek je","Amount frequency"],["Letni","Annual"],["Mesečni","Monthly"],
-    ["Letni znesek (€)","Amount (€)"],["Izračunaj znesek","Solve amount"],["Dodaj","Add"],["Počisti","Clear"],
+    ["Znesek (€)","Amount (€)"],["Izračunaj znesek","Solve amount"],["Dodaj","Add"],["Počisti","Clear"],
     ["Časovnica se pripravi samodejno. Prazno polje »Do leta« pomeni enkratni dogodek.","The timeline is created automatically. Leave ‘To year’ blank for a one-off event."],
     ["Letna obrestna mera zadolževanja (%)","Annual borrowing interest rate (%)"],
     ["Negativno stanje se samodejno obravnava kot dolg. Obrestna mera dolga je stalna.","A negative balance is treated as debt automatically. The borrowing rate is fixed."],

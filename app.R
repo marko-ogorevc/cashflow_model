@@ -124,7 +124,7 @@ ui <- fluidPage(
           radioButtons("amount_frequency","Znesek je",choices=c("Letni"="annual","Mesečni"="monthly"),
                        selected="annual",inline=TRUE),
           div(class="field-with-action",
-              textInput("event_cashflow", "Letni znesek (€)", placeholder="npr. -12000"),
+              textInput("event_cashflow", "Znesek (€)", placeholder="npr. -12000"),
               actionButton("get_cashflow", "Izračunaj znesek", class="btn-outline-secondary")
           ),
           div(class="action-row",
@@ -235,6 +235,7 @@ server <- function(input, output, session) {
 
   # All existing mathematical functions are loaded without altering their formulas.
   source('R/model.R', local = TRUE)
+  source('R/scenario.R', local = TRUE)
 
   ### LOGIC ####
   
@@ -252,25 +253,8 @@ server <- function(input, output, session) {
   }
   rv$myList <- initial_timeline()
 
-  # Scenario files save periods relative to the start, independently of display labels.
-  scenario_events <- function(x) {
-    if (!is.list(x)) stop("Neveljaven seznam dogodkov.")
-    lapply(x, function(e) {
-      if (!is.list(e) || !all(c("event_name","event_time","event_cashflow") %in% names(e)))
-        stop("Dogodek nima zahtevanih polj.")
-      nm <- e$event_name
-      tt <- unlist(e$event_time, use.names=FALSE)
-      v <- unlist(e$event_cashflow, use.names=FALSE)
-      if (!is.character(nm) || length(nm)!=1 || is.na(nm) ||
-          !nzchar(nm) || identical(nm,".internal_timeline") ||
-          !is.numeric(tt) || !length(tt) || any(!is.finite(tt)) ||
-          any(tt != round(tt)) || length(tt)>1000 ||
-          !is.numeric(v) || length(v)!=1 || !is.finite(v) ||
-          any(abs(tt)>10000))
-        stop("Dogodek vsebuje neveljavne podatke.")
-      list(event_name=nm,event_time=as.numeric(tt),event_cashflow=as.numeric(v))
-    })
-  }
+  # Pending UI restore prevents intermediate time-axis updates shifting saved breakpoints.
+  pending_origin_restore <- reactiveVal(NULL)
 
   example_data <- function(which) {
     switch(which,
@@ -292,8 +276,8 @@ server <- function(input, output, session) {
   }
 
   apply_scenario <- function(scenario) {
-    events <- scenario_events(scenario$events)
     horizon <- as.numeric(scenario$horizon)
+    events <- scenario_valid_events(scenario$events,horizon)
     if (length(horizon)!=1 || !is.finite(horizon) || horizon<1 ||
         horizon>150 || horizon!=round(horizon) || length(events)>200)
       stop("Neveljavno trajanje načrta ali preveč dogodkov.")
@@ -315,26 +299,29 @@ server <- function(input, output, session) {
     filename=function() paste0("cashflow-scenario-",Sys.Date(),".json"),
     content=function(file) {
       events <- Filter(function(e) e$event_name!=".internal_timeline",isolate(rv$myList))
-      model <- list(
-        format="cashflow-model",version=1,horizon=isolate(input$horizon),
+      model <- scenario_build(
         events=events,
+        horizon=isolate(input$horizon),
         display=list(mode=isolate(input$time_mode),
                      starting_age=isolate(input$starting_age),
                      starting_year=isolate(input$starting_year)),
         returns=list(r0=isolate(input$r0),r1=isolate(input$r1),r2=isolate(input$r2),
                      t0=isolate(to_period()(input$t0)),
                      t1=isolate(to_period()(input$t1)),
-                     t2=isolate(to_period()(input$t2)))
+                     t2=isolate(to_period()(input$t2))),
+        preferences=list(
+          borrowing_rate=isolate(input$borrowing_rate),
+          model_mode=isolate(input$model_mode),
+          asset_strategy=isolate(input$asset_strategy),
+          stock_begin=isolate(input$stock_begin),
+          stock_finish=isolate(input$stock_finish),
+          inflation=isolate(input$inflation),
+          real_values=isolate(input$real_values),
+          amount_frequency=isolate(input$amount_frequency)
+        )
       )
-      model$preferences <- list(
-        borrowing_rate=isolate(input$borrowing_rate),
-        model_mode=isolate(input$model_mode),
-        asset_strategy=isolate(input$asset_strategy),
-        stock_begin=isolate(input$stock_begin),
-        stock_finish=isolate(input$stock_finish),
-        inflation=isolate(input$inflation),
-        real_values=isolate(input$real_values)
-      )
+      # A saved scenario must pass the same validation as an imported one.
+      scenario_parse(model)
       jsonlite::write_json(model,file,pretty=TRUE,auto_unbox=TRUE)
     }
   )
@@ -342,66 +329,45 @@ server <- function(input, output, session) {
     tryCatch({
       if (is.null(input$open_scenario$size) || input$open_scenario$size>2e6)
         stop("Datoteka je prevelika (največ 2 MB).")
-      model <- jsonlite::read_json(input$open_scenario$datapath,simplifyVector=FALSE)
-      if (!identical(model$format,"cashflow-model") ||
-          !identical(as.numeric(model$version),1))
-        stop("Datoteka ni podprt scenarij Cashflow Model.")
-      # Validate all content before changing UI or reactive state.
-      events <- scenario_events(model$events)
-      h <- as.numeric(model$horizon)
-      if (length(h)!=1 || !is.finite(h) || h<1 || h>150 ||
-          h!=round(h) || length(events)>200) stop("Neveljavno trajanje načrta.")
-      d <- model$display; rt <- model$returns
-      if (!d$mode %in% c("relative","age","calendar")) stop("Neveljaven prikaz časa.")
-      age <- as.numeric(d$starting_age); year <- as.numeric(d$starting_year)
-      rvect <- vapply(rt[c("r0","r1","r2","t0","t1","t2")],
-                      function(v) as.numeric(v), numeric(1))
-      if (length(age)!=1 || !is.finite(age) || age<0 || age>120 ||
-          length(year)!=1 || !is.finite(year) || year<1900 || year>2200 ||
-          any(!is.finite(rvect)) || any(rvect[1:3]<0) ||
-          any(rvect[1:3]>.1) || any(abs(rvect[4:6])>10000))
-        stop("Neveljavne nastavitve scenarija.")
-      prefs <- model$preferences
-      if (!is.null(prefs) && !is.null(prefs$borrowing_rate)) {
-        loan <- as.numeric(prefs$borrowing_rate)
-        if (length(loan)!=1 || !is.finite(loan) || loan<0 || loan>20)
-          stop("Neveljavna obrestna mera zadolževanja.")
-        updateSliderInput(session,"borrowing_rate",value=loan)
+      raw <- jsonlite::read_json(input$open_scenario$datapath,simplifyVector=FALSE)
+      model <- scenario_parse(raw)  # Validate the complete file before changing any state.
+      d <- model$display
+      r <- model$returns
+      p <- model$preferences
+      h <- model$horizon
+      restored_origin <- if (d$mode=="age") d$starting_age else
+        if (d$mode=="calendar") d$starting_year else 0
+
+      # Shiny UI updates arrive asynchronously. Suspend automatic shifting of
+      # return-rate breakpoints until all time-axis controls are restored.
+      target <- list(mode=d$mode, age=d$starting_age, year=d$starting_year)
+      same_controls <- identical(input$time_mode,target$mode) &&
+        isTRUE(all.equal(as.numeric(input$starting_age),target$age)) &&
+        isTRUE(all.equal(as.numeric(input$starting_year),target$year))
+      if (same_controls) {
+        pending_origin_restore(NULL)
+        previous_origin(restored_origin)
+      } else {
+        pending_origin_restore(target)
       }
-      if (!is.null(prefs)) {
-        pm <- prefs$model_mode
-        ps <- prefs$asset_strategy
-        if (!pm %in% c("simple","advanced") ||
-            !ps %in% c("glide","equities","balanced","bonds"))
-          stop("Neveljavna naložbena strategija.")
-        numeric_prefs <- c(stock_begin=as.numeric(prefs$stock_begin),
-          stock_finish=as.numeric(prefs$stock_finish),
-          inflation=as.numeric(prefs$inflation))
-        if (any(!is.finite(numeric_prefs)) ||
-            any(numeric_prefs[c("stock_begin","stock_finish")]<0) ||
-            any(numeric_prefs[c("stock_begin","stock_finish")]>100) ||
-            abs(numeric_prefs["inflation"])>30)
-          stop("Neveljavne naložbene ali inflacijske predpostavke.")
-        updateRadioButtons(session,"model_mode",selected=pm)
-        updateSelectInput(session,"asset_strategy",selected=ps)
-        updateSliderInput(session,"stock_begin",value=numeric_prefs["stock_begin"])
-        updateSliderInput(session,"stock_finish",value=numeric_prefs["stock_finish"])
-        updateNumericInput(session,"inflation",value=numeric_prefs["inflation"])
-        updateCheckboxInput(session,"real_values",value=isTRUE(prefs$real_values))
-      }
-      # Apply a different display origin only after all numeric inputs are validated.
       updateRadioButtons(session,"time_mode",selected=d$mode)
-      updateNumericInput(session,"starting_age",value=age)
-      updateNumericInput(session,"starting_year",value=year)
+      updateNumericInput(session,"starting_age",value=d$starting_age)
+      updateNumericInput(session,"starting_year",value=d$starting_year)
       updateNumericInput(session,"horizon",value=h)
-      updateSliderInput(session,"r0",value=rvect[1])
-      updateSliderInput(session,"r1",value=rvect[2])
-      updateSliderInput(session,"r2",value=rvect[3])
-      new_origin <- if (d$mode=="age") age else if (d$mode=="calendar") year else 0
-      for (i in seq_along(c("t0","t1","t2")))
-        updateNumericInput(session,c("t0","t1","t2")[i],value=rvect[i+3]+new_origin)
-      previous_origin(new_origin)
-      rv$myList <- c(initial_timeline(h),events)
+      for (id in c("r0","r1","r2"))
+        updateSliderInput(session,id,value=r[[id]])
+      for (id in c("t0","t1","t2"))
+        updateNumericInput(session,id,value=r[[id]]+restored_origin)
+      updateRadioButtons(session,"model_mode",selected=p$model_mode)
+      updateSelectInput(session,"asset_strategy",selected=p$asset_strategy)
+      updateSliderInput(session,"stock_begin",value=p$stock_begin)
+      updateSliderInput(session,"stock_finish",value=p$stock_finish)
+      updateSliderInput(session,"borrowing_rate",value=p$borrowing_rate)
+      updateNumericInput(session,"inflation",value=p$inflation)
+      updateCheckboxInput(session,"real_values",value=p$real_values)
+      updateRadioButtons(session,"amount_frequency",selected=p$amount_frequency)
+      rv$myList <- c(initial_timeline(h),model$events)
+      comparison(NULL)  # Comparison belongs to the old session scenario.
       shinyalert(title="Scenarij naložen",text="Načrt je uspešno obnovljen.")
     },error=function(e) shinyalert(title="Scenarija ni bilo mogoče naložiti",
                                    text=conditionMessage(e)))
@@ -561,8 +527,19 @@ server <- function(input, output, session) {
   # Translate breakpoint inputs when the user's time origin changes.
   # Preserve the underlying relative breakpoints, including user edits.
   previous_origin <- reactiveVal(0)
-  observeEvent(origin(), {
+  observeEvent(list(input$time_mode,input$starting_age,input$starting_year), {
     new_origin <- origin()
+    pending <- pending_origin_restore()
+    if (!is.null(pending)) {
+      complete <- identical(input$time_mode,pending$mode) &&
+        isTRUE(all.equal(as.numeric(input$starting_age),pending$age)) &&
+        isTRUE(all.equal(as.numeric(input$starting_year),pending$year))
+      if (complete) {
+        previous_origin(new_origin)
+        pending_origin_restore(NULL)
+      }
+      return(invisible(NULL))
+    }
     old_origin <- previous_origin()
     shift <- new_origin - old_origin
     if (is.finite(shift) && shift != 0) {
@@ -792,7 +769,9 @@ server <- function(input, output, session) {
     updateTextInput(session, "event_name", value = event_info[[1]]$event_name)
     updateTextInput(session, "event_start", value = display_year()(min(event_info[[1]]$event_time)))
     updateTextInput(session, "event_end", value = display_year()(max(event_info[[1]]$event_time)))
-    updateTextInput(session, "event_cashflow", value = event_info[[1]]$event_cashflow)
+    updateTextInput(session, "event_cashflow",
+      value = as.numeric(event_info[[1]]$event_cashflow) /
+        if (identical(input$amount_frequency,"monthly")) 12 else 1)
     rv$myList <- remove_event(input$list_events, rv$myList)
     
   })
