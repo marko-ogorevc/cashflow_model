@@ -83,7 +83,8 @@ scenario_parse <- function(model) {
   if (!is.list(p)) stop("Neveljavne dodatne nastavitve.")
   preferences <- list(
     model_mode=scenario_choice(p$model_mode,"način modeliranja",
-                               c("simple","advanced"),"simple"),
+                               c("simple","advanced"),
+                               if (!is.null(model$returns)) "advanced" else "simple"),
     asset_strategy=scenario_choice(p$asset_strategy,"naložbena strategija",
                                    c("glide","equities","balanced","bonds"),"glide"),
     stock_begin=scenario_number(p$stock_begin,"začetni delež delnic",80,0,100),
