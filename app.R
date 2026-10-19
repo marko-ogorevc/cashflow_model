@@ -124,7 +124,7 @@ ui <- fluidPage(
           radioButtons("amount_frequency","Znesek je",choices=c("Letni"="annual","Mesečni"="monthly"),
                        selected="annual",inline=TRUE),
           div(class="field-with-action",
-              textInput("event_cashflow", "Letni znesek (€)", placeholder="npr. -12000"),
+              textInput("event_cashflow", "Znesek (€)", placeholder="npr. -12000"),
               actionButton("get_cashflow", "Izračunaj znesek", class="btn-outline-secondary")
           ),
           div(class="action-row",
