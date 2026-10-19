@@ -38,9 +38,9 @@ scenario_valid_events <- function(events, horizon) {
         !nzchar(trimws(nm)) || identical(nm,".internal_timeline") ||
         !is.numeric(years) || !length(years) || length(years)>1000L ||
         any(!is.finite(years)) || any(years!=round(years)) ||
-        any(years<0 | years>horizon) ||
+        any(abs(years)>10000) ||
         !is.numeric(amount) || length(amount)!=1L || !is.finite(amount))
-      stop("Dogodek vsebuje neveljavne podatke ali leta zunaj načrta.")
+      stop("Dogodek vsebuje neveljavne podatke.")
     list(event_name=nm,event_time=as.numeric(years),event_cashflow=as.numeric(amount))
   })
 }
