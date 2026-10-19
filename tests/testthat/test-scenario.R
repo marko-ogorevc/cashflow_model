@@ -23,8 +23,10 @@ sample_scenario <- function() {
 
 test_that("saving and loading version-1 JSON preserves all model settings", {
   original <- sample_scenario()
-  json <- jsonlite::toJSON(original,auto_unbox=TRUE,pretty=TRUE)
-  restored <- scenario_parse(jsonlite::fromJSON(json,simplifyVector=FALSE))
+  file <- tempfile(fileext=".json")
+  on.exit(unlink(file),add=TRUE)
+  jsonlite::write_json(original,file,auto_unbox=TRUE,pretty=TRUE)
+  restored <- scenario_parse(jsonlite::read_json(file,simplifyVector=FALSE))
   expect_equal(restored,scenario_parse(original))
   expect_equal(restored$events[[1]]$event_time,0)
   expect_equal(restored$events[[2]]$event_time,1:12)
